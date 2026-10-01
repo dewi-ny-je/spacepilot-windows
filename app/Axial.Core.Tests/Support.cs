@@ -76,3 +76,10 @@ sealed class FakeWebSetup : IWebSetupOperations {
         return Task.CompletedTask;
     }
 }
+
+static class Lifetime {
+    // A separate frame, so no hidden local in the caller's async state machine
+    // keeps the target reachable.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static bool Alive<T>(WeakReference<T> reference) where T : class => reference.TryGetTarget(out _);
+}

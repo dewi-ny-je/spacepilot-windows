@@ -113,8 +113,8 @@ public class ModelTests {
         var pollControl = new MockControl();
         var weak = StartPollingModel(pollControl);
         await pollControl.WaitForCount(1);
-        for (int i = 0; i < 5 && weak.TryGetTarget(out _); i++) { GC.Collect(); GC.WaitForPendingFinalizers(); await Task.Yield(); }
-        Assert.False(weak.TryGetTarget(out _), "Polling retained the model");
+        for (int i = 0; i < 5 && Lifetime.Alive(weak); i++) { GC.Collect(); GC.WaitForPendingFinalizers(); await Task.Yield(); }
+        Assert.False(Lifetime.Alive(weak), "Polling retained the model");
         pollControl.Respond(0, "{}"); await Task.Delay(20);
         Assert.Single(pollControl.Requests());
         var responsive = new ResponsiveControl(); var rateModel = new SettingsModel(responsive);

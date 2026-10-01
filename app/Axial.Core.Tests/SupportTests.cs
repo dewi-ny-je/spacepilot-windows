@@ -28,8 +28,8 @@ public class SupportTests {
             Assert.True(failed.Append([1])); failed.Flush();
             Assert.NotNull(failed.Error); Assert.False(failed.Append([2]));
             var released = Released(directory);
-            for (int i = 0; i < 5 && released.TryGetTarget(out _); i++) { GC.Collect(); GC.WaitForPendingFinalizers(); }
-            Assert.False(released.TryGetTarget(out _), "Log writer retained after draining");
+            for (int i = 0; i < 5 && Lifetime.Alive(released); i++) { GC.Collect(); GC.WaitForPendingFinalizers(); }
+            Assert.False(Lifetime.Alive(released), "Log writer retained after draining");
         } finally { Directory.Delete(directory, true); }
     }
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]

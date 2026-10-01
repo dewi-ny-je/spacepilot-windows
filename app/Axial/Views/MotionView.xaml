@@ -1,0 +1,24 @@
+<UserControl x:Class="Axial.App.MotionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,0,6,0">
+            <TextBlock Text="Motion" Style="{StaticResource Title2}"/>
+            <TextBlock x:Name="LedError" Style="{StaticResource Caption}" Foreground="{StaticResource OrangeBrush}" Visibility="Collapsed" Margin="0,4,0,0"/>
+            <DockPanel Margin="0,12,0,0" LastChildFill="False">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="0,0,0,4">
+                    <TextBlock Text="Navigation" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="NavigationBox" Width="210" AutomationProperties.Name="Navigation" SelectionChanged="OnNavigation"/>
+                </StackPanel>
+                <WrapPanel DockPanel.Dock="Left">
+                    <CheckBox x:Name="TranslationToggle" Content="Translation" Margin="0,4,22,4" Click="OnToggle"/>
+                    <CheckBox x:Name="RotationToggle" Content="Rotation" Margin="0,4,22,4" Click="OnToggle"/>
+                    <CheckBox x:Name="DominantToggle" Content="Dominant axis" Margin="0,4,22,4" Click="OnToggle"/>
+                    <CheckBox x:Name="LedToggle" Content="LED illumination" Margin="0,4,22,4" Click="OnToggle"/>
+                </WrapPanel>
+            </DockPanel>
+            <UniformGrid x:Name="AxisGrid" Columns="2" Margin="-5,8,-5,0"/>
+            <Button Content="Reset this profile" HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnReset"/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,92 @@
+<UserControl x:Class="Axial.App.TestView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:axial="clr-namespace:Axial;assembly=Axial.Core">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="53*" MinHeight="190"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="47*" MinHeight="140"/>
+        </Grid.RowDefinitions>
+        <DockPanel Margin="0,0,0,12">
+            <Button DockPanel.Dock="Right" Content="Reset object" ToolTip="Restore position, rotation and zoom" Click="OnReset"/>
+            <TextBlock Text="Test" Style="{StaticResource Title2}" VerticalAlignment="Center"/>
+        </DockPanel>
+        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="0" ClipToBounds="True" ToolTip="Pan and rotate with the cap. Near / far zooms continuously.">
+            <Grid>
+                <Viewport3D x:Name="Scene" ClipToBounds="True" SizeChanged="OnSceneResized">
+                    <Viewport3D.Camera>
+                        <OrthographicCamera x:Name="Camera" Position="-2.8,1.6,4.5" LookDirection="2.8,-1.6,-4.5" UpDirection="0,1,0" Width="6" NearPlaneDistance="0.05" FarPlaneDistance="100"/>
+                    </Viewport3D.Camera>
+                    <ModelVisual3D>
+                        <ModelVisual3D.Content>
+                            <Model3DGroup>
+                                <AmbientLight Color="#FF4A5256"/>
+                                <DirectionalLight Color="#FF6E6E6E" Direction="2.8,-1.6,-4.5"/>
+                                <PointLight Color="#FFB8AE9C" Position="-3,5,4"/>
+                                <PointLight Color="#FF74859C" Position="4,2,-3"/>
+                            </Model3DGroup>
+                        </ModelVisual3D.Content>
+                    </ModelVisual3D>
+                    <ModelVisual3D x:Name="Car">
+                        <ModelVisual3D.Transform>
+                            <Transform3DGroup>
+                                <RotateTransform3D>
+                                    <RotateTransform3D.Rotation>
+                                        <QuaternionRotation3D x:Name="CarRotation"/>
+                                    </RotateTransform3D.Rotation>
+                                </RotateTransform3D>
+                                <TranslateTransform3D x:Name="CarPosition"/>
+                            </Transform3DGroup>
+                        </ModelVisual3D.Transform>
+                    </ModelVisual3D>
+                </Viewport3D>
+                <TextBlock x:Name="Loading" Text="Loading…" Style="{StaticResource Secondary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <TextBlock Text="Toy Car · Guido Odendahl &amp; Eric Chadwick · CC0" FontSize="10.5" Foreground="{StaticResource SecondaryTextBrush}"
+                           HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="10"/>
+            </Grid>
+        </Border>
+        <TextBlock x:Name="ModelError" Grid.Row="2" Style="{StaticResource Caption}" Foreground="{StaticResource OrangeBrush}" Margin="0,6,0,0" Visibility="Collapsed"/>
+        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0" Margin="0,12,0,0">
+            <DockPanel>
+                <DockPanel DockPanel.Dock="Top" Margin="12,10,12,10">
+                    <Button DockPanel.Dock="Right" Content="Clear view" Margin="8,0,0,0" Click="OnClear"/>
+                    <Button DockPanel.Dock="Right" Content="Export…" ToolTip="Export the full session, including events outside the visible history" Click="OnExport"/>
+                    <TextBlock Text="Button events" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="Count" Text="0" Style="{StaticResource Caption}" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </DockPanel>
+                <Border DockPanel.Dock="Top" Style="{StaticResource Divider}"/>
+                <TextBlock x:Name="LostText" DockPanel.Dock="Bottom" Style="{StaticResource Caption}" Foreground="{StaticResource OrangeBrush}" Margin="8" Visibility="Collapsed"/>
+                <TextBlock x:Name="ErrorText" DockPanel.Dock="Bottom" Style="{StaticResource Caption}" Foreground="{StaticResource OrangeBrush}" Margin="8" Visibility="Collapsed"/>
+                <Grid>
+                    <TextBlock x:Name="EmptyText" Text="Press a controller button to see its events." Style="{StaticResource Secondary}" Margin="12" VerticalAlignment="Top"/>
+                    <ListBox x:Name="Log" Style="{StaticResource PlainList}" AutomationProperties.Name="Button events">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type axial:ButtonEntry}">
+                                <Grid Margin="12,6" TextElement.FontFamily="{StaticResource MonoFont}" TextElement.FontSize="11.5">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="110"/>
+                                        <ColumnDefinition Width="170"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Time, Mode=OneTime, StringFormat='HH:mm:ss.fff'}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding ButtonName, Mode=OneTime}" TextWrapping="Wrap" Margin="0,0,8,0"/>
+                                    <TextBlock x:Name="State" Grid.Column="2" Text="{Binding State, Mode=OneTime}" Foreground="{StaticResource SecondaryTextBrush}"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding DeviceName, Mode=OneTime}" ToolTip="{Binding DeviceName, Mode=OneTime}" Foreground="{StaticResource SecondaryTextBrush}"
+                                               TextAlignment="Right" TextTrimming="CharacterEllipsis" Margin="12,0,0,0"/>
+                                </Grid>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding Pressed, Mode=OneTime}" Value="True">
+                                        <Setter TargetName="State" Property="Foreground" Value="{StaticResource GreenBrush}"/>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,5 +1,4 @@
 #include "support.hpp"
-#include <filesystem>
 #include <iostream>
 #include <thread>
 // The service watches the process that launched it with --app-owned. This test
@@ -35,7 +34,10 @@ int main(int argc,char** argv){
     ok&=connected;CloseHandle(inputWrite);WaitForSingleObject(owner.hProcess,5000);CloseHandle(owner.hProcess);
     // The service removes the two sockets separately. Wait for both rather
     // than treating the instant between those operations as a cleanup failure.
-    auto socketsGone=[&]{return !std::filesystem::exists(sn::wide(path))&&!std::filesystem::exists(sn::wide(path+".control"));};
+    // AF_UNIX socket files are reparse points that std::filesystem cannot
+    // stat, so check presence without following them.
+    auto absent=[](const std::string& file){return GetFileAttributesW(sn::wide(file).c_str())==INVALID_FILE_ATTRIBUTES;};
+    auto socketsGone=[&]{return absent(path)&&absent(path+".control");};
     for(int i=0;i<150&&!socketsGone();++i)std::this_thread::sleep_for(std::chrono::milliseconds(20));
     ok&=socketsGone();
     ok&=service&&WaitForSingleObject(service,2000)==WAIT_OBJECT_0;

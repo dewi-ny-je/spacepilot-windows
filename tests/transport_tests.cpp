@@ -34,10 +34,12 @@ int main(){try{
     CHECK(reply([](sn::Socket fd){std::string huge(1024*1024+1,'x');huge+='\n';sn::writeAll(fd,huge.data(),huge.size());}).first.find("error")!=std::string::npos);
     auto [trickled,duration]=reply([](sn::Socket fd){for(int i=0;i<30;++i){if(!sn::writeAll(fd," ",1))break;std::this_thread::sleep_for(100ms);}});
     CHECK(trickled.find("error")!=std::string::npos);CHECK(duration>=1.8&&duration<2.7);
-    // Windows may size a small backlog generously. Every attempt must still
-    // return promptly, and once the backlog is full a bounded connect fails.
+    // Windows may size a small backlog generously, and a nonblocking AF_UNIX
+    // connect can report WSAEWOULDBLOCK before the backlog is full, so each
+    // attempt gets a short bound. Every attempt must still return promptly, and
+    // once the backlog is full a bounded connect fails.
     Listener listener;std::vector<sn::Socket> clients;bool full=false;
-    for(int i=0;i<512;++i){auto begin=sn::now();sn::Socket fd=sn::connectSocket(true,0,true);CHECK(sn::now()-begin<100000000);if(fd==INVALID_SOCKET){full=true;break;}clients.push_back(fd);}
+    for(int i=0;i<512;++i){auto begin=sn::now();sn::Socket fd=sn::connectSocket(true,50,true);CHECK(sn::now()-begin<200000000);if(fd==INVALID_SOCKET){full=true;break;}clients.push_back(fd);}
     if(full){auto begin=sn::now();CHECK(sn::connectSocket(true,100)==INVALID_SOCKET);CHECK(sn::now()-begin<400000000);}
     for(auto fd:clients)sn::closeSocket(fd);
     std::cout<<"PASS: fragmented replies, framing, size limit, absolute deadline and "<<(full?"full listener backlog":"prompt connects ("+std::to_string(clients.size())+" queued)")<<"\n";

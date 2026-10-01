@@ -4,8 +4,11 @@
 #include "axial/web.hpp"
 #include "loop.hpp"
 #include <boost/json.hpp>
+// Older mingw-w64 headers lack C linkage guards; the Windows SDK ones have them.
+extern "C" {
 #include <hidsdi.h>
 #include <hidpi.h>
+}
 #include <setupapi.h>
 #include <dbt.h>
 #include <psapi.h>
@@ -446,7 +449,6 @@ void acceptEvents(Socket listenerFD,HANDLE listenerEvent) {
 
 // ---- Configuration -----------------------------------------------------
 bool number(const json::value* x){return x&&x->is_number()&&std::isfinite(x->to_number<double>());}
-bool boolean(const json::value* x){return x&&x->is_bool();}
 std::unique_ptr<Configuration> parseConfig(const json::value& value) {
     auto d=value.if_object();if(!d)return nullptr;
     auto version=d->if_contains("version");auto profiles=d->if_contains("profiles");

@@ -4,6 +4,7 @@
 // the current user's root store and is name-constrained to 127.51.68.120.
 #include "axial/platform.hpp"
 #include <wincrypt.h>
+#include <sddl.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/rand.h>
@@ -43,9 +44,14 @@ void extension(X509* cert,X509* issuer,int nid,const char* value){
     X509_EXTENSION* ext=X509V3_EXT_conf_nid(nullptr,&context,nid,value);require(ext!=nullptr,"Certificate extension failed");
     int result=X509_add_ext(cert,ext,-1);X509_EXTENSION_free(ext);require(result==1,"Certificate extension assignment failed");
 }
-template<class Writer> void write(const fs::path& path,Writer writer){
+template<class Writer> void write(const fs::path& path,Writer writer,bool secret=false){
+    // The private key gets a protected DACL for its owner and SYSTEM only,
+    // the counterpart of mode 0600; certificates inherit the folder's ACL.
+    SECURITY_ATTRIBUTES attributes{sizeof(attributes),nullptr,FALSE};
+    if(secret)require(ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;;FA;;;OW)(A;;FA;;;SY)",SDDL_REVISION_1,&attributes.lpSecurityDescriptor,nullptr),"Cannot secure the private key");
     // CREATE_NEW never replaces existing credentials or follows a planted file.
-    HANDLE handle=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
+    HANDLE handle=CreateFileW(path.c_str(),GENERIC_WRITE,0,secret?&attributes:nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
+    if(attributes.lpSecurityDescriptor)LocalFree(attributes.lpSecurityDescriptor);
     require(handle!=INVALID_HANDLE_VALUE,"Credential already exists or cannot be written");
     BIO* memory=BIO_new(BIO_s_mem());bool ok=memory&&writer(memory)==1;
     char* data=nullptr;long length=memory?BIO_get_mem_data(memory,&data):0;DWORD written=0;
@@ -75,7 +81,7 @@ void prepare(const fs::path& target){
     extension(server.get(),root.get(),NID_subject_alt_name,"IP:127.51.68.120");
     extension(server.get(),root.get(),NID_authority_key_identifier,"keyid:always");
     require(X509_sign(server.get(),rootKey.get(),EVP_sha256())>0,"Server signing failed");
-    write(target/L"server.key",[&](BIO* b){return PEM_write_bio_PrivateKey(b,serverKey.get(),nullptr,nullptr,0,nullptr,nullptr);});
+    write(target/L"server.key",[&](BIO* b){return PEM_write_bio_PrivateKey(b,serverKey.get(),nullptr,nullptr,0,nullptr,nullptr);},true);
     write(target/L"server.crt",[&](BIO* b){return PEM_write_bio_X509(b,server.get());});
     write(target/L"root.crt",[&](BIO* b){return PEM_write_bio_X509(b,root.get());});
     // The CA private key never leaves memory and is freed here.
@@ -97,7 +103,7 @@ bool validCredentials(const fs::path& target){
 }
 std::vector<unsigned char> der(X509* cert){
     int length=i2d_X509(cert,nullptr);require(length>0,"Cannot encode certificate");
-    std::vector<unsigned char> bytes(size_t(length));auto output=bytes.data();require(i2d_X509(cert,&output)==length,"Cannot encode certificate");
+    std::vector<unsigned char> bytes(static_cast<size_t>(length));auto output=bytes.data();require(i2d_X509(cert,&output)==length,"Cannot encode certificate");
     return bytes;
 }
 HCERTSTORE userRoot(){return CertOpenStore(CERT_STORE_PROV_SYSTEM_W,0,0,CERT_SYSTEM_STORE_CURRENT_USER,L"Root");}
@@ -138,7 +144,7 @@ void trust(const fs::path& target){
     // Windows asks the user to approve a new trusted root; cancelling fails here.
     BOOL added=CertAddEncodedCertificateToStore(store,X509_ASN_ENCODING,bytes.data(),DWORD(bytes.size()),CERT_STORE_ADD_USE_EXISTING,nullptr);
     DWORD error=GetLastError();CertCloseStore(store,0);
-    if(!added&&(error==ERROR_CANCELLED||error==HRESULT_FROM_WIN32(ERROR_CANCELLED)))throw std::runtime_error("cancelled");
+    if(!added&&(error==ERROR_CANCELLED||error==DWORD(HRESULT_FROM_WIN32(ERROR_CANCELLED))))throw std::runtime_error("cancelled");
     require(added,"Cannot store the local web certificate");
 }
 void install(){

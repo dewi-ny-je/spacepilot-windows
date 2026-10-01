@@ -2,8 +2,8 @@
 // the macOS 3DconnexionClient framework. Applications open a handle bound to a
 // window, receive a registered "SpaceWareMessage00" window message, and fetch
 // the event with SiGetEvent from their own message loop.
-#include "axial/siapp.h"
 #include "axial/stream.hpp"
+#include "axial/siapp.h"
 #include "axial/application_buttons.hpp"
 #include <boost/json/src.hpp>
 #include <algorithm>
@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-extern "C" __declspec(dllexport) SpwRetVal SpwErrorVal=SPW_NO_ERROR;
+extern "C" {__declspec(dllexport) SpwRetVal SpwErrorVal=SPW_NO_ERROR;}
 namespace {
 namespace json=boost::json;
 struct Queued {SiSpwEvent event;size_t size;};
@@ -45,10 +45,6 @@ void convert(const std::array<int16_t,6>& a,SPWint32 m[6]){
 }
 // Device slot N is button N+1 in the SDK, which reports button N as bit N.
 uint32_t sdkButtons(uint32_t slots){return slots<<1;}
-const sn::Event* deviceFor(SiDevID id){
-    for(const auto& d:devices)if(d.device&&(id==SI_ANY_DEVICE||id==0||SiDevID(d.device)==id))return &d;
-    return nullptr;
-}
 bool matches(const Handle& h,uint32_t device){return h.device==SI_ANY_DEVICE||h.device==0||uint32_t(h.device)==device;}
 void deliver(Handle& h,const SiSpwEvent& event,size_t size){
     bool motion=event.type==SI_MOTION_EVENT;
@@ -139,7 +135,7 @@ int deviceType(uint16_t vendor,uint16_t product){
         case 0xc626:return SI_SPACENAVIGATOR;case 0xc627:return SI_SPACEEXPLORER;case 0xc628:return SI_SPACENAVIGATOR_FOR_NOTEBOOKS;
         default:break;
     }
-    return product?product:SI_UNKNOWN_DEVICE;
+    return product?int(product):int(SI_UNKNOWN_DEVICE);
 }
 void copy(char* target,size_t size,const std::string& text){if(size){size_t n=std::min(size-1,text.size());memcpy(target,text.data(),n);target[n]=0;}}
 SpwRetVal fetch(SiHdl handle,int,const SiGetEventData* data,SiSpwEvent* event,bool remove){

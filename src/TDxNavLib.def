@@ -1,0 +1,7 @@
+LIBRARY TDxNavLib
+EXPORTS
+    NlCreate
+    NlClose
+    NlReadValue
+    NlWriteValue
+    NlGetType

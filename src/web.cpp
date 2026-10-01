@@ -376,8 +376,8 @@ void WebServer::Impl::apply(WebConfiguration config){
         enabled=true;{std::lock_guard lock(mutex);diagnostics["listening"]=true;diagnostics["port"]=boundPort;}accept(epoch);
     }catch(const boost::system::system_error& e){
         stop();std::lock_guard lock(mutex);
-        if(e.code()==net::error::address_not_available){diagnostics["setupRequired"]=true;diagnostics["error"]="The local web address needs setup in Axial.";}
-        else if(e.code()==net::error::address_in_use||e.code()==net::error::access_denied)diagnostics["error"]="Another application is using web navigation port 8181. Quit the other driver (for example 3DxWare), then retry.";
+        if(e.code()==boost::system::errc::address_not_available){diagnostics["setupRequired"]=true;diagnostics["error"]="The local web address needs setup in Axial.";}
+        else if(e.code()==boost::system::errc::address_in_use||e.code()==boost::system::errc::permission_denied)diagnostics["error"]="Another application is using web navigation port 8181. Quit the other driver (for example 3DxWare), then retry.";
         else {diagnostics["setupRequired"]=true;diagnostics["error"]="Web navigation could not start. Check its setup in Axial.";}
         fprintf(stderr,"Axial web listener: %s\n",e.what());
     }catch(const std::exception& e){stop();error("Web navigation could not start. Check its setup in Axial.");fprintf(stderr,"Axial web listener: %s\n",e.what());}

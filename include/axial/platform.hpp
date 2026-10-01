@@ -31,12 +31,16 @@ typedef struct sockaddr_un {
 
 namespace sn {
 using Socket=SOCKET;
+inline std::wstring wide(const std::string& text);
+inline std::string utf8(const std::wstring& text);
+// The process environment block, which child processes inherit.
 inline std::string environment(const char* name) {
-    char* value=nullptr;size_t length=0;
-    if(_dupenv_s(&value,&length,name)!=0||!value)return {};
-    std::string result(value);free(value);return result;
+    auto key=wide(name);DWORD size=GetEnvironmentVariableW(key.c_str(),nullptr,0);
+    if(!size)return {};
+    std::wstring value(size,L'\0');size=GetEnvironmentVariableW(key.c_str(),value.data(),size);
+    value.resize(size);return utf8(value);
 }
-inline void setEnvironment(const char* name,const std::string& value){_putenv_s(name,value.c_str());}
+inline void setEnvironment(const char* name,const std::string& value){SetEnvironmentVariableW(wide(name).c_str(),wide(value).c_str());}
 inline std::string utf8(const std::wstring& text) {
     if(text.empty())return {};
     int size=WideCharToMultiByte(CP_UTF8,0,text.data(),int(text.size()),nullptr,0,nullptr,nullptr);

@@ -1,0 +1,97 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  OPENSSL_VERSION: 3.5.8
+  OPENSSL_SHA256: A8F84A39918EC6415CE765D9B429D313BA97B8143169C172E734B9514464F5B2
+
+jobs:
+  windows:
+    name: Windows x64 (driver, tests, app, installer)
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Cache OpenSSL
+        id: tls
+        uses: actions/cache@v4
+        with:
+          path: C:\axial-tls\x64
+          key: openssl-${{ env.OPENSSL_VERSION }}-msvc-x64-static-v1
+      - name: Build OpenSSL (static, /MT)
+        if: steps.tls.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest "https://github.com/openssl/openssl/releases/download/openssl-$env:OPENSSL_VERSION/openssl-$env:OPENSSL_VERSION.tar.gz" -OutFile openssl.tar.gz
+          if ((Get-FileHash openssl.tar.gz -Algorithm SHA256).Hash -ne $env:OPENSSL_SHA256) { throw 'OpenSSL checksum mismatch' }
+          tar xf openssl.tar.gz
+          Push-Location "openssl-$env:OPENSSL_VERSION"
+          & C:\Strawberry\perl\bin\perl.exe Configure VC-WIN64A no-shared no-tests no-module no-asm --prefix=C:\axial-tls\x64 --openssldir=C:\axial-tls\x64\ssl
+          if ($LASTEXITCODE) { throw 'OpenSSL configure failed' }
+          nmake /nologo build_libs
+          if ($LASTEXITCODE) { throw 'OpenSSL build failed' }
+          nmake /nologo install_dev
+          if ($LASTEXITCODE) { throw 'OpenSSL install failed' }
+          Pop-Location
+      - name: Configure
+        run: cmake --preset x64 -DAXIAL_OPENSSL_ROOT=C:\axial-tls\x64
+      - name: Build
+        run: cmake --build --preset x64 --parallel
+      - name: Native tests
+        run: ctest --preset x64 --timeout 180
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: App model tests
+        run: dotnet test app/Axial.Core.Tests -c Release -p:AxialBridgeDirectory=${{ github.workspace }}\build\x64\bin\Release
+      - name: Build settings app
+        run: dotnet publish app/Axial/Axial.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o out/app
+      - name: Build x86 adapters (32-bit applications)
+        shell: pwsh
+        run: |
+          cmake --preset x86-adapters
+          if ($LASTEXITCODE) { exit 1 }
+          cmake --build --preset x86-adapters --parallel
+          if ($LASTEXITCODE) { exit 1 }
+      - name: Package installer
+        shell: pwsh
+        run: |
+          $iscc = Get-Command iscc.exe -ErrorAction SilentlyContinue
+          if (-not $iscc) { choco install innosetup -y --no-progress; $env:PATH += ';C:\Program Files (x86)\Inno Setup 6' }
+          iscc.exe /DAppVersion=0.2.4 /DSourceRoot="$env:GITHUB_WORKSPACE" installer\Axial.iss
+          if ($LASTEXITCODE) { exit 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Axial-Windows
+          path: |
+            out/installer/*.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-logs
+          path: build/x64/Testing/Temporary/*.log
+          if-no-files-found: ignore
+
+  catalog-tests:
+    name: App model tests (Linux)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: cmake --preset catalog && cmake --build --preset catalog
+      - run: dotnet test app/Axial.Core.Tests -c Release -p:AxialBridgeDirectory=${{ github.workspace }}/build/catalog/bin

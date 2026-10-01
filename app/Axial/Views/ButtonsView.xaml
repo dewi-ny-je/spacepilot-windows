@@ -1,0 +1,14 @@
+<UserControl x:Class="Axial.App.ButtonsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel>
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+            <TextBlock x:Name="Summary" DockPanel.Dock="Right" Style="{StaticResource Secondary}" VerticalAlignment="Center"/>
+            <TextBlock Text="Buttons" Style="{StaticResource Title2}"/>
+        </DockPanel>
+        <TextBlock x:Name="EmptyText" DockPanel.Dock="Top" Style="{StaticResource Secondary}" Margin="0,0,0,10" Visibility="Collapsed"/>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel x:Name="Rows" Margin="0,0,8,0"/>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

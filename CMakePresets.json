@@ -1,0 +1,45 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "x64",
+      "displayName": "Windows x64 (Visual Studio)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/x64"
+    },
+    {
+      "name": "x86-adapters",
+      "displayName": "Windows x86 siappdll.dll and TDxNavLib.dll",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "Win32",
+      "binaryDir": "${sourceDir}/build/x86",
+      "cacheVariables": {"AXIAL_ADAPTERS_ONLY": "ON", "BUILD_TESTING": "OFF"}
+    },
+    {
+      "name": "mingw",
+      "displayName": "Cross-compile with mingw-w64 (tests run under Wine)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/mingw",
+      "toolchainFile": "${sourceDir}/cmake/mingw-w64-x86_64.cmake",
+      "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}
+    },
+    {
+      "name": "catalog",
+      "displayName": "Device catalog only (non-Windows hosts, for app model tests)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/catalog",
+      "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}
+    }
+  ],
+  "buildPresets": [
+    {"name": "x64", "configurePreset": "x64", "configuration": "Release"},
+    {"name": "x86-adapters", "configurePreset": "x86-adapters", "configuration": "Release"},
+    {"name": "mingw", "configurePreset": "mingw"},
+    {"name": "catalog", "configurePreset": "catalog"}
+  ],
+  "testPresets": [
+    {"name": "x64", "configurePreset": "x64", "configuration": "Release", "output": {"outputOnFailure": true}},
+    {"name": "mingw", "configurePreset": "mingw", "output": {"outputOnFailure": true}}
+  ]
+}

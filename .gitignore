@@ -1,0 +1,6 @@
+/build/
+/app/**/bin/
+/app/**/obj/
+/out/
+*.user
+.vs/

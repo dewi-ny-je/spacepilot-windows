@@ -13,8 +13,8 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <ApplicationIcon>Assets\Axial.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <!-- DPI awareness is declared in the manifest for WPF; the WinForms analyzer only targets WinForms startup. -->
-    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+    <!-- DPI awareness is declared in the manifest for WPF; the WinForms analyzer (WFAC010, renamed WFO0003 in .NET 10) only targets WinForms startup. -->
+    <NoWarn>$(NoWarn);WFAC010;WFO0003</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Axial.Core\Axial.Core.csproj" />

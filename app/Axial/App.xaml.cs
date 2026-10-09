@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Threading;
 
 namespace Axial.App;
@@ -73,6 +74,7 @@ public partial class App : Application {
         window.Show();
         if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
         window.Activate();
+        NativeMethods.BringToFront(new WindowInteropHelper(window).Handle);
     }
 
     async void Quit() {

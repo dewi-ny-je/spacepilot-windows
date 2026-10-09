@@ -66,6 +66,19 @@ int main(int argc,char** argv){
     axes={0,350,0,0,0,0};sn::navigate(camera,{},axes,0.01,10,true,true,false);CHECK(camera.position.z==10);
     sn::NavigationView view{original,{},false,true,true,true,{-2,-1,-10,2,1,10}};
     view.advance(axes,.01,2);CHECK(view.camera.position.z==10);CHECK(view.extents[4]>1);CHECK(std::abs(view.extents[3]/view.extents[4]-2)<1e-12);
+    // Standard views: right-handed orthonormal axes relative to the front view.
+    sn::View commanded;CHECK(sn::commandedView(sn::viewCommand(sn::View::iso2),commanded)&&commanded==sn::View::iso2);
+    CHECK(!sn::commandedView(sn::commandFit,commanded));CHECK(!sn::commandedView(sn::commandView|(9u<<24),commanded));
+    for(int n=1;n<=8;++n){auto c=sn::orient(sn::View(n),original);
+        CHECK(std::abs(sn::length(c.right)-1)<1e-12&&std::abs(sn::length(c.up)-1)<1e-12&&std::abs(sn::dot(c.right,c.up))<1e-12);
+        CHECK(sn::length(sn::cross(c.right,c.up)-c.back)<1e-12);CHECK(c.position.z==original.position.z);}
+    auto oriented=sn::orient(sn::View::left,original);CHECK(oriented.back.x==-1&&oriented.right.z==1&&oriented.up.y==1);
+    oriented=sn::orient(sn::View::top,original);CHECK(oriented.back.y==1&&oriented.up.z==-1&&oriented.right.x==1);
+    oriented=sn::orient(sn::View::iso1,original);CHECK(oriented.back.x>0&&oriented.back.y>0&&oriented.back.z>0&&std::abs(oriented.right.y)<1e-12);
+    // A Z-up client (navlib Y = client Z) looks at its front from -Y.
+    const double zUp[16]={1,0,0,0,0,0,-1,0,0,1,0,0,0,0,0,1};sn::Camera front;CHECK(sn::frontFromCoordinateSystem(zUp,front));
+    CHECK(front.up.z==1&&front.back.y==-1&&front.right.x==1);CHECK(sn::orient(sn::View::top,front).back.z==1);
+    const double mirrored[16]={-1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1};CHECK(!sn::frontFromCoordinateSystem(mirrored,front));
     sn::Event corrupt;corrupt.version=2;CHECK(!sn::valid(corrupt));
     trackAllocations=true;uint64_t checksum=0;
     for(int i=0;i<100000;++i){d.decode(combined,i,e);auto output=sn::filter(e,settings);checksum+=uint16_t(output.axes[2]);}

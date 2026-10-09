@@ -2,6 +2,7 @@
 #include "axial/keys.hpp"
 #include "axial/application.hpp"
 #include "axial/web.hpp"
+#include "axial/navigation.hpp"
 #include "loop.hpp"
 #include <boost/json.hpp>
 // Older mingw-w64 headers lack C linkage guards; the Windows SDK ones have them.
@@ -28,7 +29,14 @@ extern "C" {
 using namespace sn;
 namespace json=boost::json;
 namespace {
-enum class Action : uint8_t {none,dominant,translation,rotation,faster,slower,fit};
+enum class Action : uint8_t {none,dominant,translation,rotation,faster,slower,fit,
+    front,back,left,right,top,bottom,iso1,iso2,settings};
+// Configuration names, in Action order. View actions are Navlib and
+// 3DconnexionJS commands; the client turns its camera to the standard view.
+const char* const actionNames[]={"","dominant","translation","rotation","faster","slower","fit",
+    "front","back","left","right","top","bottom","iso1","iso2","settings"};
+// Actions that hold a key while the button is down, like a recorded shortcut.
+const std::pair<const char*,int> keyActions[]={{"escape",VK_ESCAPE},{"alt",VK_MENU},{"shift",VK_SHIFT},{"control",VK_CONTROL}};
 // Modifier bits stored with a recorded shortcut (Windows virtual-key based).
 enum Modifier : uint64_t {shiftKey=1,controlKey=2,altKey=4,windowsKey=8};
 struct Profile {
@@ -214,6 +222,22 @@ void enqueue(Peer& p,const Event& e) {
 // the device's rest position, until it is cleared or the device is removed.
 std::map<uint32_t,std::array<int16_t,6>> zeroOffsets;
 std::map<uint32_t,Event> lastMotion;
+void sendCommand(const Event& raw,uint32_t flags){
+    Event command=raw;command.kind=Kind::command;command.flags=flags;
+    if(webServer)webServer->receive(command);
+    for(auto& p:peers)if(p.fd!=INVALID_SOCKET&&p.registered&&!p.injecting&&!p.observe&&(mockMode||p.foreground))enqueue(p,command);
+}
+// Brings the settings window forward: a running app waits on this event (and
+// lets any process take the foreground for it); otherwise start the app.
+void showSettings(){
+    if(HANDLE event=OpenEventW(EVENT_MODIFY_STATE,FALSE,L"Local\\Axial.ShowSettings")){SetEvent(event);CloseHandle(event);return;}
+    std::wstring path(MAX_PATH,L'\0');DWORD n;
+    while((n=GetModuleFileNameW(nullptr,path.data(),DWORD(path.size())))==path.size())path.resize(path.size()*2);
+    path.resize(n);path=path.substr(0,path.find_last_of(L"\\/")+1)+L"Axial.exe";
+    if(GetFileAttributesW(path.c_str())==INVALID_FILE_ATTRIBUTES)return;
+    std::wstring command=L"\""+path+L"\"";STARTUPINFOW startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};
+    if(CreateProcessW(path.c_str(),command.data(),nullptr,nullptr,FALSE,0,nullptr,nullptr,&startup,&process)){CloseHandle(process.hThread);CloseHandle(process.hProcess);}
+}
 void route(const Event& input) {
     ++reports;
     Event raw=input;
@@ -234,10 +258,10 @@ void route(const Event& input) {
             case Action::rotation:selected->motion.rotation=!selected->motion.rotation;break;
             case Action::faster:for(auto& gain:selected->motion.gain)gain=std::min(20.f,gain*1.25f);break;
             case Action::slower:for(auto& gain:selected->motion.gain)gain=std::max(.01f,gain/1.25f);break;
-            case Action::fit:{Event command=raw;command.kind=Kind::command;command.flags=0x10000;
-                if(webServer)webServer->receive(command);
-                for(auto& p:peers)if(p.fd!=INVALID_SOCKET&&p.registered&&!p.injecting&&!p.observe&&(mockMode||p.foreground))enqueue(p,command);break;}
-            default:break;
+            case Action::fit:sendCommand(raw,commandFit);break;
+            case Action::settings:if(!mockMode)outputWorker->post(showSettings);break;
+            case Action::none:break;
+            default:sendCommand(raw,viewCommand(View(int(selected->actions[i])-int(Action::front)+int(View::front))));break;
         }
     }
     Event e=filter(raw,selected->motion);
@@ -501,9 +525,11 @@ std::unique_ptr<Configuration> parseConfig(const json::value& value) {
                 if(label&&(!label->is_string()||label->as_string().size()>128))return nullptr;
                 if(action){
                     if(!action->is_string()||keyCode||command)return nullptr;
-                    static const char* actions[]={"","dominant","translation","rotation","faster","slower","fit"};
-                    auto found=std::find_if(std::begin(actions),std::end(actions),[&](const char* a){return action->as_string()==a;});
-                    if(found==std::end(actions))return nullptr;p.actions[i]=Action(found-std::begin(actions));
+                    auto key=std::find_if(std::begin(keyActions),std::end(keyActions),[&](const auto& k){return action->as_string()==k.first;});
+                    auto found=std::find_if(std::begin(actionNames),std::end(actionNames),[&](const char* a){return action->as_string()==a;});
+                    if(key!=std::end(keyActions)){p.keys[i]=key->second;p.modifiers[i]=0;}
+                    else if(found!=std::end(actionNames))p.actions[i]=Action(found-std::begin(actionNames));
+                    else return nullptr;
                 }
                 if(command)commands[i]=std::string(command->as_string());
             }

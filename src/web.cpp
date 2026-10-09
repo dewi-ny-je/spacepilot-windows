@@ -14,6 +14,7 @@
 #include <thread>
 #include <filesystem>
 #include <optional>
+#include <vector>
 
 namespace sn {
 namespace net=boost::asio;
@@ -92,6 +93,7 @@ struct WebServer::Impl::Session:std::enable_shared_from_this<Session> {
     struct Controller {
         std::string id,name;
         bool subscribed=false,focus=false,moving=false,busy=false,fit=false;
+        uint8_t view=0; // a pending sn::View for the next fit, or 0
         uint64_t lastInput=0,lastFrame=0,generation=0;
         Event input;
         json::object properties;
@@ -210,7 +212,7 @@ struct WebServer::Impl::Session:std::enable_shared_from_this<Session> {
     void failure(const json::value& call,const char* reason){server.unsupported();send(json::array{4,call,"wamp.error.invalid_argument",reason});}
     void result(const json::value& call,json::value value){send(json::array{3,call,std::move(value)});}
     void stop(const std::shared_ptr<Controller>& c,bool releaseButtons=true){
-        ++c->generation;c->input.axes={};c->lastInput=0;c->lastFrame=0;c->busy=false;c->fit=false;
+        ++c->generation;c->input.axes={};c->lastInput=0;c->lastFrame=0;c->busy=false;c->fit=false;c->view=0;
         if(c->moving){c->moving=false;remote(c,"self:update",json::array{"motion",false},{});}
         if(releaseButtons){
             if(c->commandHeld){c->commandHeld=false;remote(c,"self:update",json::array{"commands.activeCommand",""},{});}
@@ -272,7 +274,11 @@ struct WebServer::Impl::Session:std::enable_shared_from_this<Session> {
             if(e.kind==Kind::reset||e.kind==Kind::removed){stop(c);continue;}
             if(!c->focus||!c->subscribed||server.focused!=key)continue;
             if(e.kind==Kind::motion){c->input=e;c->lastInput=now();if(std::none_of(e.axes.begin(),e.axes.end(),[](int x){return x!=0;}))stop(c,false);}
-            if(e.kind==Kind::command&&(e.flags&0x10000))c->fit=true;
+            if(e.kind==Kind::command){
+                View view;
+                if(commandedView(e.flags,view)){c->fit=true;c->view=uint8_t(view);}
+                else if(e.flags&commandFit){c->fit=true;c->view=0;}
+            }
             if(e.kind==Kind::buttons){
                 auto previous=c->buttons[e.device];c->buttons[e.device]=e.buttons;uint32_t changed=previous^e.buttons;
                 char suffix[16];snprintf(suffix,sizeof(suffix),"@%04x:%04x",e.vendor,e.product);
@@ -295,8 +301,9 @@ struct WebServer::Impl::Session:std::enable_shared_from_this<Session> {
     }
     void frame(const std::shared_ptr<Controller>& c,uint64_t time){
         c->busy=true;auto generation=c->generation;
-        auto values=std::make_shared<json::object>();auto remaining=std::make_shared<int>(7);
-        const char* properties[]={"view.affine","view.perspective","view.extents","model.extents","pivot.position","view.target","view.rotatable"};
+        std::vector<const char*> properties{"view.affine","view.perspective","view.extents","model.extents","pivot.position","view.target","view.rotatable"};
+        if(c->fit&&c->view){properties.push_back("views.front");properties.push_back("coordinateSystem");}
+        auto values=std::make_shared<json::object>();auto remaining=std::make_shared<int>(int(properties.size()));
         std::weak_ptr<Session> weak=shared_from_this();
         for(auto property:properties){
             remote(c,"self:read",json::array{property},[weak,c,generation,values,remaining,property,time](bool ok,json::value value){
@@ -320,8 +327,19 @@ struct WebServer::Impl::Session:std::enable_shared_from_this<Session> {
         if(!perspective&&hasExtents)scale=std::max(1e-3,number(extents.as_array()[4])-number(extents.as_array()[1]));
         double dt=c->lastFrame?double(time-c->lastFrame)/1e9:1.0/120;c->lastFrame=time;
         if(c->fit){
-            c->fit=false;
+            c->fit=false;auto view=View(c->view);c->view=0;
             if(numbers(bounds,6)){const auto& b=bounds.as_array();Vec size{number(b[3])-number(b[0]),number(b[4])-number(b[1]),number(b[5])-number(b[2])};
+                if(uint8_t(view)){
+                    // A standard view looks at the model's centre, oriented from the
+                    // client's front view or, failing that, its coordinate system.
+                    Camera front;double m[16];auto matrix=member(values,"views.front"),system=member(values,"coordinateSystem");
+                    if(numbers(matrix,16)){const auto& f=matrix.as_array();Camera given;
+                        given.right=normalized({number(f[0]),number(f[1]),number(f[2])});given.up=normalized({number(f[4]),number(f[5]),number(f[6])});given.back=normalized({number(f[8]),number(f[9]),number(f[10])});
+                        if(length(given.right)>0&&length(given.up)>0&&length(given.back)>0)front=given;
+                    }else if(numbers(system,16)){for(int i=0;i<16;++i)m[i]=number(system.as_array()[i]);frontFromCoordinateSystem(m,front);}
+                    auto oriented=orient(view,front);camera.right=oriented.right;camera.up=oriented.up;camera.back=oriented.back;
+                    pivot={(number(b[0])+number(b[3]))/2,(number(b[1])+number(b[4]))/2,(number(b[2])+number(b[5]))/2};
+                }
                 double radius=std::max(1e-6,length(size)/2);camera.position=pivot+camera.back*(radius/std::sin(0.7853981633974483/2)*1.05);
                 if(hasExtents){auto& x=extents.as_array();double height=number(x[4])-number(x[1]);double aspect=height>0?(number(x[3])-number(x[0]))/height:1;aspect=std::max(.01,aspect);x[0]=-radius*std::max(1.,aspect);x[3]=-number(x[0]);x[1]=-radius*std::max(1.,1/aspect);x[4]=-number(x[1]);}
             }

@@ -63,7 +63,25 @@ struct Session:std::enable_shared_from_this<Session> {
         if(clock)clock->running(run);
     }
     void stopMotion(){input.axes={};if(moving){moving=false;updateFrameClock();set("motion",value_t(false));}lastFrame=0;clientFrame=0;}
-    void fit(){
+    // The front view's orientation: the client's views.front, else the
+    // navlib's own axes in the client's coordinate system.
+    sn::Camera front(){
+        auto index=[&](int i){return rowMajor?(i%4)*4+i/4:i;};
+        sn::Camera c;value_t v;double m[16];
+        auto column=[&](int i){return sn::Vec{m[i*4],m[i*4+1],m[i*4+2]};};
+        if(get("views.front",v)&&v.type==matrix_type&&!closed){
+            for(int i=0;i<16;++i)m[i]=v.matrix[index(i)];
+            sn::Camera f;f.right=sn::normalized(column(0));f.up=sn::normalized(column(1));f.back=sn::normalized(column(2));
+            if(sn::length(f.right)>0&&sn::length(f.up)>0&&sn::length(f.back)>0)return f;
+        }
+        if(!closed&&get("coordinateSystem",v)&&v.type==matrix_type){
+            for(int i=0;i<16;++i)m[i]=v.matrix[index(i)];
+            sn::frontFromCoordinateSystem(m,c);
+        }
+        return c;
+    }
+    // Fits the model in the view; with a view, first turns the camera to it.
+    void fit(const sn::View* view=nullptr){
         value_t bounds,affine;
         if(!get("model.extents",bounds)||bounds.type!=box_type||!get("view.affine",affine)||affine.type!=matrix_type||closed)return;
         const auto& b=bounds.box;if(!validBox(b))return;
@@ -72,6 +90,11 @@ struct Session:std::enable_shared_from_this<Session> {
         double radius=std::max(1e-6,sn::length(sn::Vec{b.max.x-b.min.x,b.max.y-b.min.y,b.max.z-b.min.z})/2);
         if(!std::isfinite(radius))return;
         auto index=[&](int i){return rowMajor?(i%4)*4+i/4:i;};
+        if(view){
+            auto c=sn::orient(*view,front());if(closed)return;
+            const sn::Vec axes[]={c.right,c.up,c.back};
+            for(int i=0;i<3;++i){if(!finite(axes[i]))return;affine.matrix[index(i*4)]=axes[i].x;affine.matrix[index(i*4+1)]=axes[i].y;affine.matrix[index(i*4+2)]=axes[i].z;}
+        }
         sn::Vec back{affine.matrix[index(8)],affine.matrix[index(9)],affine.matrix[index(10)]};
         double n=sn::length(back);if(!std::isfinite(n)||n<1e-12)return;back=back*(1/n);
         value_t v;double fov=0.7853981633974483;if(get("view.fov",v)&&v.type==double_type&&std::isfinite(v.d))fov=std::clamp(v.d,0.05,3.0);
@@ -144,7 +167,11 @@ struct Session:std::enable_shared_from_this<Session> {
             stopMotion();value_t release;release.type=string_type;release.string={const_cast<char*>(""),1};set("commands.activeCommand",release);if(!closed)loadBindings();return;
         }
         if(!active||!focused||activeHandle.load(std::memory_order_relaxed)!=handle)return;
-        if(e.kind==sn::Kind::command&&(e.flags&0x10000)){fit();return;}
+        if(e.kind==sn::Kind::command){
+            sn::View view;
+            if(sn::commandedView(e.flags,view))fit(&view);else if(e.flags&sn::commandFit)fit();
+            return;
+        }
         if(e.kind==sn::Kind::motion){
             input=e;lastInput=sn::now();
             bool nonzero=std::any_of(e.axes.begin(),e.axes.end(),[](int x){return x!=0;});

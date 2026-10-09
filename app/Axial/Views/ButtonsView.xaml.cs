@@ -14,6 +14,13 @@ public partial class ButtonsView : UserControl {
     static readonly Choice[] DriverActions = [
         new("", "No driver action"), new("dominant", "Toggle dominant axis"), new("translation", "Toggle translation"),
         new("rotation", "Toggle rotation"), new("faster", "Increase speed"), new("slower", "Decrease speed"), new("fit", "Fit view"),
+        // Standard views for Navlib and 3DconnexionJS applications, such as Fusion.
+        new("front", "Front view"), new("back", "Back view"), new("left", "Left view"), new("right", "Right view"),
+        new("top", "Top view"), new("bottom", "Bottom view"), new("iso1", "Isometric view (front, right, top)"),
+        new("iso2", "Isometric view (front, left, top)"),
+        // Keys held while the button is held.
+        new("escape", "Esc key"), new("alt", "Alt key"), new("shift", "Shift key"), new("control", "Ctrl key"),
+        new("settings", "Open Axial settings"),
     ];
     SettingsModel? model;
     readonly List<ButtonRow> rows = [];

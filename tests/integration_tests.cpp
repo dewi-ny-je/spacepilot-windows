@@ -1,5 +1,6 @@
 #include "support.hpp"
 #include "axial/siapp.h"
+#include "axial/navigation.hpp"
 #include <cerrno>
 #include <navlib/navlib.h>
 #include <array>
@@ -163,6 +164,11 @@ int main(int argc,char** argv){try {
     for(const char* invalid:{R"({"buttons":[{"keyCode":{}}]})",R"({"buttons":[{"keyCode":1.5}]})",R"({"buttons":[{"keyCode":255}]})",R"({"buttons":[{"modifiers":-1}]})",R"({"buttons":[{"command":42}]})",R"({"dominant":1})"}){
         CHECK(sn::request(std::string("{\"op\":\"setConfig\",\"config\":{\"version\":1,\"profiles\":{\"*\":")+invalid+"}}}").find("error")!=std::string::npos);
     }
+    // Views, held keys and the settings window are driver actions too.
+    CHECK(sn::request(R"({"op":"setConfig","config":{"version":1,"profiles":{"*":{"buttons":[{"action":"top"},{"action":"iso2"},{"action":"escape"},{"action":"control"},{"action":"settings"}]}}}})").find("\"ok\":true")!=std::string::npos);
+    for(const char* invalid:{R"([{"action":"escape","keyCode":27}])",R"([{"action":"command","command":"x"}])",R"([{"action":"view"}])"}){
+        CHECK(sn::request(std::string("{\"op\":\"setConfig\",\"config\":{\"version\":1,\"profiles\":{\"*\":{\"buttons\":")+invalid+"}}}}").find("error")!=std::string::npos);
+    }
     CHECK(sn::request(R"({"op":"setConfig","config":{"version":1,"profiles":{"*":{"buttons":[{"action":"dominant"}]}}}})").find("\"ok\":true")!=std::string::npos);
     e.kind=sn::Kind::buttons;e.buttons=0;CHECK(sn::writeAll(inject,&e,sizeof(e)));e.buttons=1;CHECK(sn::writeAll(inject,&e,sizeof(e)));
     e.kind=sn::Kind::motion;e.axes={100,20,0,0,0,0};CHECK(sn::writeAll(inject,&e,sizeof(e)));
@@ -253,6 +259,11 @@ int main(int argc,char** argv){try {
     navlib::value_t invalid(1.0);CHECK(write(handle,"active",&invalid)!=0);CHECK(read(handle,"unknown",&invalid)!=0);
     e.kind=sn::Kind::command;e.flags=0x10000;e.received=sn::now();double beforeFit=camera.matrix.m23;
     CHECK(sn::writeAll(inject,&e,sizeof(e)));CHECK(waitFor([&]{return camera.matrix.m23!=beforeFit;}));CHECK(camera.transactions==0);
+    // A standard view turns the row-major camera to look down from +Y, then fits.
+    e.flags=sn::viewCommand(sn::View::top);e.received=sn::now();CHECK(sn::writeAll(inject,&e,sizeof(e)));
+    CHECK(waitFor([&]{return std::abs(camera.matrix.m12-1)<1e-9;}));
+    CHECK(std::abs(camera.matrix.m21+1)<1e-9&&std::abs(camera.matrix.m00-1)<1e-9&&camera.matrix.m13>1&&std::abs(camera.matrix.m03)<1e-9&&std::abs(camera.matrix.m23)<1e-9);
+    CHECK(camera.transactions==0);
     CHECK(close(handle)==0);CHECK(close(handle)!=0);
     CHECK(waitFor([]{return clients(1);}));
     // Per-device bindings and edge state; neutral motion must not clear a held button.

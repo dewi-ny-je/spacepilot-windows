@@ -94,6 +94,13 @@ the USB identity for device events. A button bit is set while that button is
 held. Axis values are signed HID-scale values; their interpretation as
 translation or rotation depends on the consumer and the active profile.
 
+A `command` record is sent to the foreground subscriber when a button assigned
+to a driver command is pressed. `flags` is `0x10000` to fit the model in the
+view, or `0x20000` for a standard view with the view number in the top byte:
+1 front, 2 back, 3 left, 4 right, 5 top, 6 bottom, 7 isometric from front,
+right and top, 8 isometric from front, left and top. A client shows that view
+and fits the model in it.
+
 ## Use it from Python
 
 In practice, a client opens the Unix socket, sends a `hello` record, then reads

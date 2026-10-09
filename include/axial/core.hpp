@@ -12,6 +12,9 @@ namespace sn {
 constexpr uint32_t magic = 0x534e4156;
 enum class Kind : uint16_t { hello = 1, motion, buttons, added, removed, reset, command };
 enum Flags : uint32_t { monitor = 1, replay = 2, orbit = 4, disconnected = 8 };
+// Kind::command flags: fit the model, or show a standard view (whose number,
+// a sn::View, is in the top byte) and fit the model in it.
+enum Command : uint32_t { commandFit = 0x10000, commandView = 0x20000 };
 // Local little-endian ABI, identical on macOS arm64 and x86_64. No pointers.
 struct Event {
     uint32_t magicValue = magic;

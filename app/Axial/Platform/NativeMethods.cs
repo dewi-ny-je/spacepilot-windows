@@ -12,6 +12,24 @@ internal static class NativeMethods {
     [DllImport("user32.dll", ExactSpelling = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool AllowSetForegroundWindow(uint processId);
     [DllImport("user32.dll", ExactSpelling = true)] internal static extern uint MapVirtualKeyW(uint code, uint mapType);
     [DllImport("user32.dll", ExactSpelling = true)] internal static extern unsafe int GetKeyNameTextW(int parameter, char* buffer, int size);
+    [DllImport("user32.dll", ExactSpelling = true)] internal static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll", ExactSpelling = true)] internal static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+    [DllImport("user32.dll", ExactSpelling = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool AttachThreadInput(uint thread, uint target, [MarshalAs(UnmanagedType.Bool)] bool attach);
+    [DllImport("user32.dll", ExactSpelling = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll", ExactSpelling = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool BringWindowToTop(IntPtr window);
+    [DllImport("kernel32.dll", ExactSpelling = true)] internal static extern uint GetCurrentThreadId();
+
+    // A device button asks for the window while another application has the
+    // foreground, so Windows' foreground lock would only flash the taskbar.
+    // Sharing the foreground thread's input state lets the window take focus.
+    internal static void BringToFront(IntPtr window) {
+        var foreground = GetForegroundWindow();
+        if (window == IntPtr.Zero || foreground == window) return;
+        uint target = foreground == IntPtr.Zero ? 0 : GetWindowThreadProcessId(foreground, out _), current = GetCurrentThreadId();
+        bool attached = target != 0 && target != current && AttachThreadInput(current, target, true);
+        try { BringWindowToTop(window); SetForegroundWindow(window); }
+        finally { if (attached) AttachThreadInput(current, target, false); }
+    }
 
     internal static bool SetWindowAttribute(IntPtr window, int attribute, int value) {
         try { return DwmSetWindowAttribute(window, attribute, ref value, sizeof(int)) == 0; }

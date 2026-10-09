@@ -68,11 +68,9 @@ struct Session:std::enable_shared_from_this<Session> {
     sn::Camera front(){
         auto index=[&](int i){return rowMajor?(i%4)*4+i/4:i;};
         sn::Camera c;value_t v;double m[16];
-        auto column=[&](int i){return sn::Vec{m[i*4],m[i*4+1],m[i*4+2]};};
         if(get("views.front",v)&&v.type==matrix_type&&!closed){
             for(int i=0;i<16;++i)m[i]=v.matrix[index(i)];
-            sn::Camera f;f.right=sn::normalized(column(0));f.up=sn::normalized(column(1));f.back=sn::normalized(column(2));
-            if(sn::length(f.right)>0&&sn::length(f.up)>0&&sn::length(f.back)>0)return f;
+            if(sn::frontFromView(m,c))return c;
         }
         if(!closed&&get("coordinateSystem",v)&&v.type==matrix_type){
             for(int i=0;i<16;++i)m[i]=v.matrix[index(i)];

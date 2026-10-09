@@ -50,10 +50,17 @@ inline Vec normalized(Vec v){double n=length(v);return n>1e-12?v*(1/n):Vec{};}
 // The front camera's axes in client coordinates. coordinateSystem is the
 // column-major transform from client to navlib coordinates (Y up, Z out of the
 // screen); the navlib's own axes are its inverse rotation, the transposed rows.
+inline bool usableAxes(Vec right,Vec up,Vec back,Camera& front){
+    right=normalized(right);up=normalized(up);back=normalized(back);
+    if(length(right)==0||length(up)==0||length(back)==0||std::abs(dot(right,up))>1e-6||std::abs(dot(cross(right,up),back)-1)>1e-6)return false;
+    front.right=right;front.up=up;front.back=back;return true;
+}
 inline bool frontFromCoordinateSystem(const double m[16],Camera& front){
-    Camera c;c.right=normalized({m[0],m[4],m[8]});c.up=normalized({m[1],m[5],m[9]});c.back=normalized({m[2],m[6],m[10]});
-    if(length(c.right)==0||length(c.up)==0||length(c.back)==0||std::abs(dot(c.right,c.up))>1e-6||std::abs(dot(cross(c.right,c.up),c.back)-1)>1e-6)return false;
-    front.right=c.right;front.up=c.up;front.back=c.back;return true;
+    return usableAxes({m[0],m[4],m[8]},{m[1],m[5],m[9]},{m[2],m[6],m[10]},front);
+}
+// views.front is a column-major camera matrix, like view.affine.
+inline bool frontFromView(const double m[16],Camera& front){
+    return usableAxes({m[0],m[1],m[2]},{m[4],m[5],m[6]},{m[8],m[9],m[10]},front);
 }
 // Orients the camera for a standard view relative to the front view; the
 // position is left for the caller to fit.

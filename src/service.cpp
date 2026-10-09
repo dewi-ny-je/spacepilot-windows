@@ -168,11 +168,17 @@ INPUT keyInput(int key,bool down) {
     input.ki.dwFlags=(down?0:KEYEVENTF_KEYUP)|(extendedKey(key)?KEYEVENTF_EXTENDEDKEY:0);
     return input;
 }
+// Injected presses per virtual key, on the key worker: a modifier held by its
+// own button and by a shortcut is released only when neither holds it.
+std::array<unsigned,256> injected{};
 void postKey(int key,bool down,uint64_t modifiers){
     const std::pair<uint64_t,int> modifierKeys[]={{controlKey,VK_CONTROL},{altKey,VK_MENU},{shiftKey,VK_SHIFT},{windowsKey,VK_LWIN}};
     std::vector<INPUT> inputs;
-    if(down){for(auto [bit,vk]:modifierKeys)if(modifiers&bit)inputs.push_back(keyInput(vk,true));inputs.push_back(keyInput(key,true));}
-    else{inputs.push_back(keyInput(key,false));for(auto it=std::rbegin(modifierKeys);it!=std::rend(modifierKeys);++it)if(modifiers&it->first)inputs.push_back(keyInput(it->second,false));}
+    auto press=[&](int vk){if(!injected[vk]++)inputs.push_back(keyInput(vk,true));};
+    auto release=[&](int vk){if(injected[vk]&&!--injected[vk])inputs.push_back(keyInput(vk,false));};
+    if(down){for(auto [bit,vk]:modifierKeys)if(modifiers&bit)press(vk);press(key);}
+    else{release(key);for(auto it=std::rbegin(modifierKeys);it!=std::rend(modifierKeys);++it)if(modifiers&it->first)release(it->second);}
+    if(inputs.empty())return;
     SendInput(UINT(inputs.size()),inputs.data(),sizeof(INPUT));
 }
 void clearHeld(uint32_t device=0){heldKeys.release(device,postKey);}

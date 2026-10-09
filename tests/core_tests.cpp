@@ -79,6 +79,9 @@ int main(int argc,char** argv){
     const double zUp[16]={1,0,0,0,0,0,-1,0,0,1,0,0,0,0,0,1};sn::Camera front;CHECK(sn::frontFromCoordinateSystem(zUp,front));
     CHECK(front.up.z==1&&front.back.y==-1&&front.right.x==1);CHECK(sn::orient(sn::View::top,front).back.z==1);
     const double mirrored[16]={-1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1};CHECK(!sn::frontFromCoordinateSystem(mirrored,front));
+    // A collinear views.front basis is rejected, leaving the coordinateSystem fallback.
+    const double collinear[16]={1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1};CHECK(!sn::frontFromView(collinear,front));
+    const double turned[16]={0,0,-1,0,0,1,0,0,1,0,0,0,0,0,0,1};CHECK(sn::frontFromView(turned,front)&&front.right.z==-1&&front.back.x==1);
     sn::Event corrupt;corrupt.version=2;CHECK(!sn::valid(corrupt));
     trackAllocations=true;uint64_t checksum=0;
     for(int i=0;i<100000;++i){d.decode(combined,i,e);auto output=sn::filter(e,settings);checksum+=uint16_t(output.axes[2]);}

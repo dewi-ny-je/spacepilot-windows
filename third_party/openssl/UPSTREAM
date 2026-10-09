@@ -1,0 +1,3 @@
+OpenSSL 3.5.8 LTS, statically linked into axial-service.exe (web server) and axial-web-setup.exe.
+Source: https://github.com/openssl/openssl/releases/tag/openssl-3.5.8
+License: Apache License 2.0 (LICENSE.txt).

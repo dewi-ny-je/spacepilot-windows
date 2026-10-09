@@ -1,0 +1,45 @@
+<UserControl x:Class="Axial.App.ServiceView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,0,6,0">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Export…" Click="OnExport"/>
+                <TextBlock Text="Service &amp; diagnostics" Style="{StaticResource Title2}" VerticalAlignment="Center"/>
+            </DockPanel>
+            <CheckBox x:Name="LoginToggle" Content="Start at login" HorizontalAlignment="Right" Margin="0,10,0,10" Click="OnLogin"/>
+            <GroupBox Header="Permissions" Margin="0,0,0,12">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Path Data="M1,3 L17,3 L17,13 L1,13 Z M4,6 L5,6 M7,6 L8,6 M10,6 L11,6 M13,6 L14,6 M5,10 L13,10" Stroke="{StaticResource TextBrush}" StrokeThickness="1.4"
+                              VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock x:Name="ShortcutText" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock x:Name="ElevationText" Style="{StaticResource Caption}" Margin="0,8,0,0"/>
+                </StackPanel>
+            </GroupBox>
+            <UniformGrid x:Name="Charts" Columns="2" Margin="0,0,-12,0"/>
+            <GroupBox x:Name="WebGroup" Header="WebSocket API compatibility" Margin="0,0,0,12">
+                <StackPanel>
+                    <CheckBox x:Name="WebToggle" Content="Enable web navigation" HorizontalAlignment="Left" Click="OnWebToggle"/>
+                    <DockPanel Margin="0,10,0,0">
+                        <Button x:Name="SetupButton" DockPanel.Dock="Right" Content="Set Up…" Click="OnSetUp" Margin="10,0,0,0"/>
+                        <Ellipse x:Name="Spinner" DockPanel.Dock="Right" Width="16" Height="16" StrokeThickness="2.2" Stroke="{StaticResource AccentBrush}"
+                                 StrokeDashArray="5 3" RenderTransformOrigin="0.5,0.5" Visibility="Collapsed" VerticalAlignment="Center">
+                            <Ellipse.RenderTransform>
+                                <RotateTransform x:Name="SpinnerRotation"/>
+                            </Ellipse.RenderTransform>
+                        </Ellipse>
+                        <TextBox x:Name="WebStatus" Style="{StaticResource SelectableText}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                    </DockPanel>
+                    <TextBlock x:Name="WebHelp" Style="{StaticResource Caption}" Margin="0,8,0,0"
+                               Text="Allow Axial to create its local web certificate. Windows asks you to approve the certificate once. Axial checks this setup automatically."/>
+                </StackPanel>
+            </GroupBox>
+            <StackPanel x:Name="MockLabel" Orientation="Horizontal" Visibility="Collapsed">
+                <Path Data="M5,1 L11,1 M6,1 L6,6 L1.5,14 L14.5,14 L10,6 L10,1" Stroke="{StaticResource OrangeBrush}" StrokeThickness="1.4" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                <TextBlock Text="Mock input service" Foreground="{StaticResource OrangeBrush}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

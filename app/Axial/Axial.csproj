@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AssemblyName>Axial</AssemblyName>
+    <RootNamespace>Axial.App</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- WPF and Windows Forms implicit usings collide (Button, Application, …). -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <ApplicationIcon>Assets\Axial.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- DPI awareness is declared in the manifest for WPF; the WinForms analyzer only targets WinForms startup. -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Axial.Core\Axial.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="Assets\Axial.ico" CopyToOutputDirectory="PreserveNewest" />
+    <None Remove="Assets\make-icon.py" />
+    <!-- CC0 toy car for the Test tab, loaded at runtime by GltfLoader. -->
+    <None Include="..\..\third_party\toycar\source\**" Link="Assets\toycar\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\third_party\toycar\CC0-1.0.txt;..\..\third_party\toycar\README.md" Link="Assets\toycar\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

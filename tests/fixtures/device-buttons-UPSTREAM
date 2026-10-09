@@ -1,0 +1,10 @@
+Source: https://github.com/JakubAndrysek/PySpaceMouse
+Revision: 46fa35a49124de0c07b97f087bcde5818caa6e8e
+File: pyspacemouse/devices.toml -> upstream-device-buttons.toml (unmodified)
+License: MIT; original LICENSE retained as device-buttons-LICENSE
+Retrieved: 2026-09-15
+
+Native replay reader: tests/device_cases.hpp
+Only supported USB layouts are tested. Known conflicting labels/positions and
+independently transcribed supplementary facts are kept in the native device catalog.
+The fixture is a development test input; no Python code ships in Axial.

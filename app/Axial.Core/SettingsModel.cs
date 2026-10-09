@@ -263,6 +263,20 @@ public sealed class SettingsModel : INotifyPropertyChanged {
             foreach (var waiter in waiters) waiter.TrySetResult();
         }
     }
+    // Zero calibration: the selected device's current deflection becomes its
+    // rest position until it is cleared or the device is reconnected.
+    public async Task CalibrateAsync(bool clear = false) {
+        if (stopped || Device is not { } device) return;
+        var request = "{\"op\":\"calibrate\",\"device\":" + device.Id + (clear ? ",\"clear\":true}" : "}");
+        var data = await client.RequestAsync(request);
+        bool done = false;
+        try {
+            using var response = JsonDocument.Parse(data);
+            done = response.RootElement.ValueKind == JsonValueKind.Object && response.RootElement.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.True;
+        } catch (JsonException) { }
+        Message = done ? "" : "Could not calibrate: the service did not respond.";
+        AcceptStatus(await client.RequestAsync("{\"op\":\"status\"}"));
+    }
     void EnsureServiceRunning() {
         if (quitting || stopped || launcher == null || launcher.IsRunning) return;
         double now = Clock.Seconds;

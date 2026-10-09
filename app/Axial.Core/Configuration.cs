@@ -64,6 +64,7 @@ public sealed record Device {
     public bool? LedSupported { get; init; }
     public int? LedState { get; init; }
     public uint? LedError { get; init; }
+    public bool Calibrated { get; init; }
     [JsonIgnore] public ControllerLayout? Layout => DeviceCatalog.Identity(Vendor, Product) is uint identity ? DeviceCatalog.Layouts.GetValueOrDefault(identity) : null;
     [JsonIgnore] public string DisplayName => Layout?.Name ?? Name;
 }

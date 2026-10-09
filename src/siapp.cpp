@@ -260,7 +260,11 @@ SpwRetVal SPWAPI SiGetDriverInfo(SiVerInfo* info){
     return sn::request("{\"op\":\"status\"}").starts_with("{\"error\"")?fail(SI_NO_DRIVER):ok();
 }
 SpwRetVal SPWAPI SiBeep(SiHdl handle,char*){std::lock_guard lock(mutex);return lookup(handle)?ok():fail(SI_BAD_HANDLE);}
-SpwRetVal SPWAPI SiRezero(SiHdl handle){std::lock_guard lock(mutex);return lookup(handle)?ok():fail(SI_BAD_HANDLE);}
+// Zero calibration: the current deflection of the cap becomes its rest position.
+SpwRetVal SPWAPI SiRezero(SiHdl handle){
+    {std::lock_guard lock(mutex);if(!lookup(handle))return fail(SI_BAD_HANDLE);}
+    return sn::request("{\"op\":\"calibrate\"}").starts_with("{\"error\"")?fail(SI_NO_DRIVER):ok();
+}
 SpwRetVal SPWAPI SiGrabDevice(SiHdl handle,SPWbool){std::lock_guard lock(mutex);return lookup(handle)?ok():fail(SI_BAD_HANDLE);}
 SpwRetVal SPWAPI SiReleaseDevice(SiHdl handle){std::lock_guard lock(mutex);return lookup(handle)?ok():fail(SI_BAD_HANDLE);}
 SpwRetVal SPWAPI SiSetUiMode(SiHdl handle,SPWuint32){std::lock_guard lock(mutex);return lookup(handle)?ok():fail(SI_BAD_HANDLE);}

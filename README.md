@@ -26,6 +26,10 @@ After installation:
    process send input to an elevated (administrator) window, so shortcuts do not
    reach elevated applications.
 3. Reopen your CAD application. In Fusion select the **Latest** SpaceMouse driver.
+4. If the view drifts while the cap is untouched, let go of it and click
+   **Motion → Calibrate** (or run `axialctl calibrate`). The current position
+   becomes the rest position until you clear it or reconnect the device.
+   Applications that call `SiRezero` trigger the same calibration.
 
 Uninstalling from **Settings → Apps** removes the program, the compatibility
 DLLs, the login item and Axial's web certificate. Saved profiles in

@@ -61,7 +61,12 @@ public partial class MotionView : UserControl {
             LedError.Visibility = Visibility.Visible;
         } else LedError.Visibility = Visibility.Collapsed;
         for (int i = 0; i < 6; i++) cards[i].Live(device != null && i < device.Axes.Length ? device.Axes[i] : 0);
+        CalibrateButton.IsEnabled = device != null;
+        ClearCalibrationButton.IsEnabled = device?.Calibrated == true;
+        CalibrationState.Text = device?.Calibrated == true ? "Calibrated" : "";
     }
+    async void OnCalibrate(object sender, RoutedEventArgs e) { if (model != null) await model.CalibrateAsync(); }
+    async void OnClearCalibration(object sender, RoutedEventArgs e) { if (model != null) await model.CalibrateAsync(clear: true); }
 
     void OnToggle(object sender, RoutedEventArgs e) {
         if (sender is not CheckBox toggle) return;

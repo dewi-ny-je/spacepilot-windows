@@ -2,6 +2,7 @@
 #include "axial/siapp.h"
 #include <cerrno>
 #include <navlib/navlib.h>
+#include <array>
 #include <atomic>
 #include <functional>
 #include <iostream>
@@ -332,6 +333,23 @@ int main(int argc,char** argv){try {
     do CHECK(sn::readAll(fragmented,&event,sizeof(event)));while(event.kind!=sn::Kind::motion);
     CHECK(event.axes[0]==-123);
     sn::closeSocket(fragmented);
+    // Zero calibration: the current deflection becomes the device's rest
+    // position, is applied to later reports (clamped), and can be cleared.
+    sn::Socket zero=sn::openEvents(sn::Flags::monitor);CHECK(zero!=INVALID_SOCKET);
+    auto nextMotion=[&]{do CHECK(sn::readAll(zero,&event,sizeof(event)));while(event.kind!=sn::Kind::motion||event.device!=e.device);return event.axes;};
+    using Axes=std::array<int16_t,6>;
+    e.axes={12,-7,0,0,0,30};CHECK(sn::writeAll(inject,&e,sizeof(e)));CHECK((nextMotion()==Axes{12,-7,0,0,0,30}));
+    CHECK(sn::request(R"({"op":"calibrate","clear":1})").find("error")!=std::string::npos);
+    CHECK(sn::request(R"({"op":"calibrate","device":-1})").find("error")!=std::string::npos);
+    CHECK(sn::request(R"({"op":"calibrate"})").find("\"ok\":true")!=std::string::npos);
+    CHECK((nextMotion()==Axes{}));
+    CHECK(sn::request("{\"op\":\"status\"}").find("\"calibrated\":true")!=std::string::npos);
+    e.axes={20,-7,0,0,0,-32768};CHECK(sn::writeAll(inject,&e,sizeof(e)));CHECK((nextMotion()==Axes{8,0,0,0,0,-32768}));
+    CHECK(sn::request(R"({"op":"calibrate","clear":true})").find("\"ok\":true")!=std::string::npos);
+    CHECK((nextMotion()==Axes{20,-7,0,0,0,-32768}));
+    e.axes={};CHECK(sn::writeAll(inject,&e,sizeof(e)));CHECK((nextMotion()==Axes{}));
+    CHECK(sn::request("{\"op\":\"status\"}").find("\"calibrated\":true")==std::string::npos);
+    sn::closeSocket(zero);
     // Exercise socket reuse with short-lived clients, as when an app restarts.
     for(int i=0;i<200;++i){
         sn::Socket peer=sn::openEvents(sn::Flags::monitor);CHECK(peer!=INVALID_SOCKET);

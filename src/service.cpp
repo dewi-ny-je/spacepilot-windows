@@ -210,8 +210,17 @@ void enqueue(Peer& p,const Event& e) {
     if(!p.queue.push(e)){++overflows;closePeer(p);return;}
     flush(p);
 }
-void route(const Event& raw) {
+// Zero calibration: the deflection captured by the "calibrate" request becomes
+// the device's rest position, until it is cleared or the device is removed.
+std::map<uint32_t,std::array<int16_t,6>> zeroOffsets;
+std::map<uint32_t,Event> lastMotion;
+void route(const Event& input) {
     ++reports;
+    Event raw=input;
+    if(raw.kind==Kind::removed){zeroOffsets.erase(raw.device);lastMotion.erase(raw.device);}
+    else if(auto zero=zeroOffsets.find(raw.device);zero!=zeroOffsets.end())
+        for(size_t i=0;i<6;++i)raw.axes[i]=int16_t(std::clamp(int(input.axes[i])-int(zero->second[i]),-32768,32767));
+    if(input.kind==Kind::motion)lastMotion[input.device]=input;
     Profile* selected=&activeProfile;
     uint32_t suppressed=0;
     uint32_t ignoredPrevious=0;uint32_t* previous=&ignoredPrevious;
@@ -522,12 +531,18 @@ struct Snapshot {
     std::array<bool,16> ledSupported{};
     std::array<int,16> ledState{};
     std::array<uint32_t,16> ledError{};
+    std::array<bool,16> calibrated{};
 };
 json::object status() {
     Snapshot s=loop.sync([]{
         Snapshot snapshot;
         for(const auto& h:hidDevices)if(h.active()&&snapshot.count<16){size_t i=snapshot.count++;snapshot.latest[i]=h.decoder.state;snapshot.ledSupported[i]=bool(h.led);snapshot.ledState[i]=h.led?h.led->state.load():-1;snapshot.ledError[i]=h.led?h.led->error.load():0;}
         for(const auto& e:virtualDevices)if(e.device&&snapshot.count<16)snapshot.latest[snapshot.count++]=e;
+        // Report axes as clients see them, relative to a calibrated rest position.
+        for(size_t i=0;i<snapshot.count;++i)if(auto zero=zeroOffsets.find(snapshot.latest[i].device);zero!=zeroOffsets.end()){
+            snapshot.calibrated[i]=true;auto& axes=snapshot.latest[i].axes;
+            for(size_t a=0;a<6;++a)axes[a]=int16_t(std::clamp(int(axes[a])-int(zero->second[a]),-32768,32767));
+        }
         for(const auto& p:peers)if(p.fd!=INVALID_SOCKET&&p.registered)++snapshot.clients;
         snapshot.reports=reports;snapshot.overflows=overflows;snapshot.rejected=rejected;snapshot.foreground=foregroundPID;snapshot.app=foregroundApp;
         return snapshot;
@@ -537,7 +552,7 @@ json::object status() {
         json::array axes;for(int16_t x:e.axes)axes.push_back(x);
         items.push_back(json::object{{"id",e.device},{"vendor",e.vendor},{"product",e.product},{"name",spec?spec->name:"Unknown"},
             {"buttonCount",spec?spec->buttons.size():0},{"axes",axes},{"buttons",e.buttons},{"ledSupported",s.ledSupported[i]},
-            {"ledState",s.ledState[i]},{"ledError",s.ledError[i]}});
+            {"ledState",s.ledState[i]},{"ledError",s.ledError[i]},{"calibrated",s.calibrated[i]}});
     }
     PROCESS_MEMORY_COUNTERS memory{};GetProcessMemoryInfo(GetCurrentProcess(),&memory,sizeof(memory));
     FILETIME created,exited,kernel,user;GetProcessTimes(GetCurrentProcess(),&created,&exited,&kernel,&user);
@@ -559,6 +574,26 @@ json::value handle(const json::value& request) {
     if(op=="retryWeb"){webServer->retry();return json::object{{"ok",true}};}
     if(op=="requestAccessibility")return json::object{{"trusted",true}};
     if(op=="stop"){stopRequested=true;return json::object{{"ok",true}};}
+    if(op=="calibrate"){
+        auto clearValue=object->if_contains("clear"),deviceValue=object->if_contains("device");
+        if(clearValue&&!clearValue->is_bool())return json::object{{"error","clear must be a boolean"}};
+        if(deviceValue&&!(deviceValue->is_int64()&&deviceValue->as_int64()>0&&deviceValue->as_int64()<=UINT32_MAX))return json::object{{"error","device must be a device id"}};
+        bool clear=clearValue&&clearValue->as_bool();uint32_t device=deviceValue?uint32_t(deviceValue->as_int64()):0;
+        size_t changed=loop.sync([clear,device]{
+            size_t count=0;
+            // Re-send each device's last reading so clients see the new rest position at once.
+            for(auto [id,motion]:lastMotion){
+                if(device&&id!=device)continue;
+                if(clear){if(!zeroOffsets.erase(id))continue;}else zeroOffsets[id]=motion.axes;
+                ++count;motion.received=now();route(motion);
+            }
+            if(clear)for(auto it=zeroOffsets.begin();it!=zeroOffsets.end();){
+                if(!device||it->first==device){it=zeroOffsets.erase(it);++count;}else ++it;
+            }
+            return count;
+        });
+        return json::object{{"ok",true},{"calibrated",changed}};
+    }
     if(op=="getConfig"){std::lock_guard lock(documentMutex);return document;}
     if(op=="getCommands"){std::lock_guard lock(documentMutex);return commandCatalog;}
     if(op=="commands"){

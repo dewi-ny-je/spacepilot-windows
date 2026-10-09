@@ -21,6 +21,31 @@ public class ModelTests {
     }
 
     [Fact]
+    public async Task CalibrationTargetsTheSelectedDeviceAndRefreshesStatus() {
+        var control = new MockControl();
+        var model = new SettingsModel(control);
+        var device = new Device { Id = 7, Vendor = 0x046d, Product = 0xc627, Name = "SpaceExplorer" };
+        model.AcceptStatus(Json.Encode(new Status { Devices = [device], Mock = true }));
+        var calibrate = model.CalibrateAsync();
+        await control.WaitForCount(1);
+        Assert.Equal("{\"op\":\"calibrate\",\"device\":7}", control.Requests()[0]);
+        control.Respond(0, "{\"ok\":true,\"calibrated\":1}");
+        await control.WaitForCount(2);
+        Assert.Equal("{\"op\":\"status\"}", control.Requests()[1]);
+        control.Respond(1, Json.Encode(new Status { Devices = [device with { Calibrated = true }], Mock = true }));
+        await calibrate;
+        Assert.True(model.Device?.Calibrated); Assert.Equal("", model.Message);
+        var clear = model.CalibrateAsync(clear: true);
+        await control.WaitForCount(3);
+        Assert.Equal("{\"op\":\"calibrate\",\"device\":7,\"clear\":true}", control.Requests()[2]);
+        control.Respond(2, "{\"error\":\"Axial service is not running\"}");
+        await control.WaitForCount(4); control.Respond(3, Json.Encode(new Status { Devices = [device], Mock = true }));
+        await clear;
+        Assert.StartsWith("Could not calibrate", model.Message);
+        model.Shutdown();
+    }
+
+    [Fact]
     public void CatalogNamesSparseSlotsCsvAndRecordingCancellation() {
         var explorer = DeviceCatalog.Layouts[0x046dc627];
         Assert.Equal("SpaceExplorer", explorer.Name); Assert.Equal(15, explorer.Buttons.Count);

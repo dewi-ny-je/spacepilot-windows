@@ -253,5 +253,8 @@ while ($true) {
 The service's request API is a separate newline-delimited JSON protocol at
 `%LOCALAPPDATA%\Axial\events.control` (or the `AXIAL_SOCKET` path with
 `.control` appended). The bundled `axialctl` command uses it for `status`,
-`config`, `commands`, and configuration updates. It is not part of the binary
+`config`, `commands`, `calibrate`, and configuration updates. `{"op":"calibrate"}`
+makes each device's current deflection its rest position (add `"device":id` for
+one device, or `"clear":true` to undo); event records and status then report
+axes relative to it. It is not part of the binary
 event record stream described here.

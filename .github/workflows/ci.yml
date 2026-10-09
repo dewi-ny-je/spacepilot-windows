@@ -62,7 +62,7 @@ jobs:
           if ($LASTEXITCODE) { throw 'OpenSSL install failed' }
           Pop-Location
       - name: Configure
-        run: cmake --preset x64 -DAXIAL_OPENSSL_ROOT=C:\axial-tls\x64 -DAXIAL_VERSION=${{ steps.version.outputs.version }}
+        run: cmake --preset x64 -DAXIAL_OPENSSL_ROOT=C:\axial-tls\x64 "-DAXIAL_VERSION=${{ steps.version.outputs.version }}"
       - name: Build
         run: cmake --build --preset x64 --parallel
       - name: Native tests
@@ -73,11 +73,11 @@ jobs:
       - name: App model tests
         run: dotnet test app/Axial.Core.Tests -c Release -p:AxialBridgeDirectory=${{ github.workspace }}\build\x64\bin\Release
       - name: Build settings app
-        run: dotnet publish app/Axial/Axial.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:Version=${{ steps.version.outputs.version }} -o out/app
+        run: dotnet publish app/Axial/Axial.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false "-p:Version=${{ steps.version.outputs.version }}" -o out/app
       - name: Build x86 adapters (32-bit applications)
         shell: pwsh
         run: |
-          cmake --preset x86-adapters -DAXIAL_VERSION=${{ steps.version.outputs.version }}
+          cmake --preset x86-adapters "-DAXIAL_VERSION=${{ steps.version.outputs.version }}"
           if ($LASTEXITCODE) { exit 1 }
           cmake --build --preset x86-adapters --parallel
           if ($LASTEXITCODE) { exit 1 }

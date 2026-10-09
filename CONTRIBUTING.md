@@ -107,3 +107,12 @@ The Windows code follows axial's sources closely so fixes can be carried across:
 | `3DconnexionNavlib.framework` | `TDxNavLib.dll` |
 | Keychain and admin trust settings | Key file with a protected DACL; CA in the CurrentUser root store |
 | Loopback alias for 127.51.68.120 | Not needed: all of 127/8 is loopback on Windows |
+
+## Releases
+
+CI (`.github/workflows/ci.yml`) runs on every push to `main`, on pull requests and
+on demand (**Actions → CI → Run workflow**). Each run uploads the installer and a
+portable zip as the `Axial-Windows` artifact. To publish a release, push a tag
+such as `v0.3.0`: the tag sets the version of the binaries, the app and the
+installer, and a GitHub release is created with both files and `SHA256SUMS`.
+Tags must have the form `vMAJOR.MINOR.PATCH`.

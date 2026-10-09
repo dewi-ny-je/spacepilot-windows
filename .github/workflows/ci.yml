@@ -2,6 +2,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -18,8 +19,23 @@ jobs:
     name: Windows x64 (driver, tests, app, installer)
     runs-on: windows-2022
     timeout-minutes: 60
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+      # A vX.Y.Z tag sets the product version; other builds use the CMake default.
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $tag = [regex]::Match($env:GITHUB_REF_NAME, '^v(\d+\.\d+\.\d+)$')
+            if (-not $tag.Success) { throw "Release tags must look like v1.2.3, not $env:GITHUB_REF_NAME" }
+            $version = $tag.Groups[1].Value
+          } else {
+            $version = [regex]::Match((Get-Content CMakeLists.txt -Raw), 'set\(AXIAL_VERSION "([0-9.]+)"').Groups[1].Value
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
@@ -46,7 +62,7 @@ jobs:
           if ($LASTEXITCODE) { throw 'OpenSSL install failed' }
           Pop-Location
       - name: Configure
-        run: cmake --preset x64 -DAXIAL_OPENSSL_ROOT=C:\axial-tls\x64
+        run: cmake --preset x64 -DAXIAL_OPENSSL_ROOT=C:\axial-tls\x64 -DAXIAL_VERSION=${{ steps.version.outputs.version }}
       - name: Build
         run: cmake --build --preset x64 --parallel
       - name: Native tests
@@ -57,11 +73,11 @@ jobs:
       - name: App model tests
         run: dotnet test app/Axial.Core.Tests -c Release -p:AxialBridgeDirectory=${{ github.workspace }}\build\x64\bin\Release
       - name: Build settings app
-        run: dotnet publish app/Axial/Axial.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o out/app
+        run: dotnet publish app/Axial/Axial.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:Version=${{ steps.version.outputs.version }} -o out/app
       - name: Build x86 adapters (32-bit applications)
         shell: pwsh
         run: |
-          cmake --preset x86-adapters
+          cmake --preset x86-adapters -DAXIAL_VERSION=${{ steps.version.outputs.version }}
           if ($LASTEXITCODE) { exit 1 }
           cmake --build --preset x86-adapters --parallel
           if ($LASTEXITCODE) { exit 1 }
@@ -70,13 +86,26 @@ jobs:
         run: |
           $iscc = Get-Command iscc.exe -ErrorAction SilentlyContinue
           if (-not $iscc) { choco install innosetup -y --no-progress; $env:PATH += ';C:\Program Files (x86)\Inno Setup 6' }
-          iscc.exe /DAppVersion=0.2.4 /DSourceRoot="$env:GITHUB_WORKSPACE" installer\Axial.iss
+          iscc.exe /DAppVersion=${{ steps.version.outputs.version }} /DSourceRoot="$env:GITHUB_WORKSPACE" installer\Axial.iss
           if ($LASTEXITCODE) { exit 1 }
+      # The same files as the installer, for running without installing.
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = "out/portable/Axial-${{ steps.version.outputs.version }}-x64"
+          New-Item -ItemType Directory -Force "$root/x86" | Out-Null
+          Copy-Item -Recurse out/app/* $root
+          'axial-service.exe','axialctl.exe','axial-web-setup.exe','axial-bridge.dll','siappdll.dll','TDxNavLib.dll' | ForEach-Object { Copy-Item "build/x64/bin/Release/$_" $root }
+          'siappdll.dll','TDxNavLib.dll' | ForEach-Object { Copy-Item "build/x86/bin/Release/$_" "$root/x86" }
+          Copy-Item LICENSE, README.md $root
+          Compress-Archive -Path $root -DestinationPath "out/installer/Axial-${{ steps.version.outputs.version }}-x64-portable.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: Axial-Windows
           path: |
             out/installer/*.exe
+            out/installer/*.zip
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
@@ -95,3 +124,24 @@ jobs:
           dotnet-version: 8.0.x
       - run: cmake --preset catalog && cmake --build --preset catalog
       - run: dotnet test app/Axial.Core.Tests -c Release -p:AxialBridgeDirectory=${{ github.workspace }}/build/catalog/bin
+
+  # Pushing a vX.Y.Z tag publishes the installer and portable zip as a release.
+  release:
+    name: Publish release
+    if: github.ref_type == 'tag'
+    needs: [windows, catalog-tests]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Axial-Windows
+          path: dist
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.windows.outputs.version }}
+        run: |
+          cd dist && sha256sum * > SHA256SUMS && cd ..
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "Axial $VERSION" --generate-notes

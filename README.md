@@ -8,8 +8,11 @@ applications such as Autodesk Fusion, PrusaSlicer, FreeCAD and Blender use with
 
 ## Install
 
-Download `Axial-<version>-x64-setup.exe` from the CI artifacts or a release and
-run it. Uninstall 3DxWare first, and quit CAD applications before installing or
+Download `Axial-<version>-x64-setup.exe` from the
+[Releases](https://github.com/dewi-ny-je/spacepilot-windows/releases) page and run
+it. Every CI run also attaches the installer and a portable zip as the
+`Axial-Windows` artifact; to build the current `main` on demand, open
+**Actions → CI → Run workflow**. Uninstall 3DxWare first, and quit CAD applications before installing or
 upgrading: the installer replaces `siappdll.dll` and `TDxNavLib.dll` in
 `System32` (64-bit) and `SysWOW64` (32-bit), and asks for a restart when a
 running application still holds them.

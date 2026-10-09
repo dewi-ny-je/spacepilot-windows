@@ -1,0 +1,23 @@
+name: Packages
+# Builds the installer and portable zip from main, or from any branch on demand.
+# Download them from the run's Artifacts section.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows packages
+    uses: ./.github/workflows/build.yml
+    with:
+      tests: false
+      package: true

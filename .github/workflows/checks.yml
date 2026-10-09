@@ -1,0 +1,37 @@
+name: PR checks
+# Builds everything and runs the native and app tests. Produces no packages.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows build and tests
+    uses: ./.github/workflows/build.yml
+    with:
+      tests: true
+      package: false
+
+  app-model:
+    name: App model tests (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - run: cmake --preset catalog && cmake --build --preset catalog
+      - run: dotnet test app/Axial.Core.Tests -c Release -p:AxialBridgeDirectory=${{ github.workspace }}/build/catalog/bin

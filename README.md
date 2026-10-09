@@ -10,9 +10,9 @@ applications such as Autodesk Fusion, PrusaSlicer, FreeCAD and Blender use with
 
 Download `Axial-<version>-x64-setup.exe` from the
 [Releases](https://github.com/dewi-ny-je/spacepilot-windows/releases) page and run
-it. Every CI run also attaches the installer and a portable zip as the
-`Axial-Windows` artifact; to build the current `main` on demand, open
-**Actions → CI → Run workflow**. Uninstall 3DxWare first, and quit CAD applications before installing or
+it. Every push to `main` also builds the installer and a portable zip, attached
+to the **Packages** workflow run as an artifact; to build a branch on demand,
+open **Actions → Packages → Run workflow**. Uninstall 3DxWare first, and quit CAD applications before installing or
 upgrading: the installer replaces `siappdll.dll` and `TDxNavLib.dll` in
 `System32` (64-bit) and `SysWOW64` (32-bit), and asks for a restart when a
 running application still holds them.
@@ -64,7 +64,7 @@ loopback address on Windows, so no network configuration changes are made.
 ## Build
 
 Requirements: Visual Studio 2022 with the C++ desktop workload, CMake 3.25+,
-the .NET 8 SDK, OpenSSL 3.5 built as static `/MT` libraries (see
+the .NET 10 SDK, OpenSSL 3.5 built as static `/MT` libraries (see
 [CONTRIBUTING.md](CONTRIBUTING.md)) and Inno Setup 6 for the installer.
 
 ```powershell

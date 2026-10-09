@@ -6,7 +6,7 @@
 | --- | --- |
 | `src/` | Input service, `siappdll.dll`, `TDxNavLib.dll`, web server and setup tool, `axialctl`, settings bridge DLL |
 | `include/axial/` | Shared HID decoder, device catalog, event transport, platform layer and navigation logic |
-| `app/Axial.Core/` | Settings app model (C#, `net8.0`): configuration, service client, diagnostics, web setup, logs |
+| `app/Axial.Core/` | Settings app model (C#, `net10.0`): configuration, service client, diagnostics, web setup, logs |
 | `app/Axial.Core.Tests/` | xUnit port of axial's Swift app tests; runs on Windows and Linux |
 | `app/Axial/` | WPF settings app and notification-area icon |
 | `tests/` | Native C++ regression tests ported from axial, mock service and fixtures |
@@ -22,7 +22,7 @@ Use a *Developer PowerShell for VS 2022* (x64). OpenSSL is built once as static
 libraries with the static CRT, exactly as CI does:
 
 ```powershell
-# OpenSSL 3.5.8, from the release tarball, with Strawberry Perl
+# OpenSSL 3.5.9, from the release tarball, with Strawberry Perl
 perl Configure VC-WIN64A no-shared no-tests no-module no-asm --prefix=C:\axial-tls\x64 --openssldir=C:\axial-tls\x64\ssl
 nmake build_libs
 nmake install_dev
@@ -33,7 +33,7 @@ ctest --preset x64
 ```
 
 Without `AXIAL_OPENSSL_ROOT`, CMake downloads and builds the pinned OpenSSL
-itself. Boost 1.90.0 is fetched by CMake and checked against its hash.
+itself. Boost 1.92.0 is fetched by CMake and checked against its hash.
 
 | Preset | Purpose |
 | --- | --- |
@@ -89,8 +89,8 @@ iscc /DAppVersion=0.2.4 /DSourceRoot=$PWD installer\Axial.iss
 
 The installer is written to `out/installer`. It installs the app and service to
 `Program Files\Axial`, the compatibility DLLs to `System32` and `SysWOW64`, and
-removes the web certificate and login item on uninstall. CI builds the same
-installer and uploads it as the `Axial-Windows` artifact.
+removes the web certificate and login item on uninstall. The **Packages** workflow builds
+the same installer on every push to `main`.
 
 ## Porting notes
 
@@ -108,11 +108,17 @@ The Windows code follows axial's sources closely so fixes can be carried across:
 | Keychain and admin trust settings | Key file with a protected DACL; CA in the CurrentUser root store |
 | Loopback alias for 127.51.68.120 | Not needed: all of 127/8 is loopback on Windows |
 
-## Releases
+## Workflows
 
-CI (`.github/workflows/ci.yml`) runs on every push to `main`, on pull requests and
-on demand (**Actions → CI → Run workflow**). Each run uploads the installer and a
-portable zip as the `Axial-Windows` artifact. To publish a release, push a tag
-such as `v0.3.0`: the tag sets the version of the binaries, the app and the
-installer, and a GitHub release is created with both files and `SHA256SUMS`.
-Tags must have the form `vMAJOR.MINOR.PATCH`.
+| Workflow | Runs on | Does |
+| --- | --- | --- |
+| **PR checks** (`checks.yml`) | Pull requests, pushes to `main`, on demand | Builds everything, runs the native and app tests, compiles the settings app; no packages |
+| **Packages** (`package.yml`) | Pushes to `main`, on demand for any branch | Builds the installer and portable zip and attaches them to the run as `Axial-<version>-Windows` |
+| **Release** (`release.yml`) | On demand, or a pushed `v*` tag | Builds, tests and publishes a GitHub release with both files and `SHA256SUMS` |
+
+All three share `build.yml`. To release, open **Actions → Release → Run workflow**,
+enter a version such as `0.3.0` and tick **Publish as a pre-release** if needed;
+the workflow creates the `v0.3.0` tag on the selected commit. Pushing a tag works
+too: `v0.3.0` makes a release and `v0.3.0-beta.1` a pre-release (any version with
+a `-suffix` is a pre-release). The version is stamped into the binaries, the app
+and the installer; Windows file versions use its numeric part.

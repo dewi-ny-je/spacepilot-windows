@@ -3,8 +3,8 @@
 include(FetchContent)
 include(ExternalProject)
 FetchContent_Declare(axial_boost
-  URL https://github.com/boostorg/boost/releases/download/boost-1.90.0/boost-1.90.0-b2-nodocs.tar.xz
-  URL_HASH SHA256=9e6bee9ab529fb2b0733049692d57d10a72202af085e553539a05b4204211a6f
+  URL https://github.com/boostorg/boost/releases/download/boost-1.92.0/boost-1.92.0-b2-nodocs.tar.xz
+  URL_HASH SHA256=ea7b982002cc9dfbe59b0b217b206f470dc75f3de0bb2973d844118934d82411
   SOURCE_SUBDIR axial-unused)
 FetchContent_MakeAvailable(axial_boost)
 add_library(axial-boost INTERFACE)
@@ -19,8 +19,8 @@ if(AXIAL_OPENSSL_ROOT)
   set(tls_prefix "${AXIAL_OPENSSL_ROOT}")
 else()
   set(tls_prefix "${CMAKE_BINARY_DIR}/tls/install")
-  set(tls_url https://github.com/openssl/openssl/releases/download/openssl-3.5.8/openssl-3.5.8.tar.gz)
-  set(tls_hash SHA256=a8f84a39918ec6415ce765d9b429d313ba97b8143169c172e734b9514464f5b2)
+  set(tls_url https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz)
+  set(tls_hash SHA256=603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a)
   find_program(PERL perl REQUIRED)
   if(MSVC)
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)

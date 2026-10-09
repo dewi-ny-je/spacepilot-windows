@@ -1,10 +1,13 @@
 ; Axial for Windows installer. Built by CI:
-;   iscc /DAppVersion=x.y.z /DSourceRoot=<repository> installer\Axial.iss
+;   iscc /DAppVersion=x.y.z[-pre] /DFileVersion=x.y.z /DSourceRoot=<repository> installer\Axial.iss
 ; Expects build\x64\bin\Release (native x64), build\x86\bin\Release (32-bit
 ; adapters) and out\app (published settings app).
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
+#endif
+#ifndef FileVersion
+  #define FileVersion AppVersion
 #endif
 #ifndef SourceRoot
   #define SourceRoot ".."
@@ -19,6 +22,7 @@ AppId={{6B1E7E0A-58C4-4D7B-9C1B-3A9D2F0E5A41}
 AppName=Axial
 AppVersion={#AppVersion}
 AppVerName=Axial {#AppVersion}
+VersionInfoVersion={#FileVersion}
 AppPublisher=Axial contributors
 AppPublisherURL=https://github.com/dewi-ny-je/spacepilot-windows
 DefaultDirName={autopf}\Axial

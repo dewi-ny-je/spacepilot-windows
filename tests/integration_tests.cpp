@@ -352,9 +352,11 @@ int main(int argc,char** argv){try {
     e.axes={12,-7,0,0,0,30};CHECK(sn::writeAll(inject,&e,sizeof(e)));CHECK((nextMotion()==Axes{12,-7,0,0,0,30}));
     CHECK(sn::request(R"({"op":"calibrate","clear":1})").find("error")!=std::string::npos);
     CHECK(sn::request(R"({"op":"calibrate","device":-1})").find("error")!=std::string::npos);
-    CHECK(sn::request(R"({"op":"calibrate"})").find("\"ok\":true")!=std::string::npos);
+    // Virtual devices have no hardware rezero, so they are calibrated in software.
+    CHECK(sn::request(R"({"op":"calibrate"})").find("\"hardware\":0")!=std::string::npos);
     CHECK((nextMotion()==Axes{}));
     CHECK(sn::request("{\"op\":\"status\"}").find("\"calibrated\":true")!=std::string::npos);
+    CHECK(sn::request("{\"op\":\"status\"}").find("\"rezero\":false")!=std::string::npos);
     e.axes={20,-7,0,0,0,-32768};CHECK(sn::writeAll(inject,&e,sizeof(e)));CHECK((nextMotion()==Axes{8,0,0,0,0,-32768}));
     CHECK(sn::request(R"({"op":"calibrate","clear":true})").find("\"ok\":true")!=std::string::npos);
     CHECK((nextMotion()==Axes{20,-7,0,0,0,-32768}));

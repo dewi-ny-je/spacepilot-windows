@@ -261,7 +261,12 @@ The service's request API is a separate newline-delimited JSON protocol at
 `%LOCALAPPDATA%\Axial\events.control` (or the `AXIAL_SOCKET` path with
 `.control` appended). The bundled `axialctl` command uses it for `status`,
 `config`, `commands`, `calibrate`, and configuration updates. `{"op":"calibrate"}`
-makes each device's current deflection its rest position (add `"device":id` for
-one device, or `"clear":true` to undo); event records and status then report
-axes relative to it. It is not part of the binary
+rezeroes each device that has 3DxWare's calibration feature report (ID 7,
+usage `0xff00:0x22`, set to 0 while the LED blinks for about four seconds) and
+makes the current deflection the rest position of the others (add
+`"device":id` for one device, or `"clear":true` to undo a software
+calibration); event records and status then report axes relative to it. The
+response counts the devices in `calibrated` and those rezeroed in hardware in
+`hardware`; status reports `rezero`, `calibrating` and `deviceCalibrated` per
+device. It is not part of the binary
 event record stream described here.

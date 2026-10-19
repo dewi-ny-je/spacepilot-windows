@@ -65,6 +65,10 @@ public sealed record Device {
     public int? LedState { get; init; }
     public uint? LedError { get; init; }
     public bool Calibrated { get; init; }
+    // Hardware zero calibration: supported, running now, done since connecting.
+    public bool Rezero { get; init; }
+    public bool Calibrating { get; init; }
+    public bool DeviceCalibrated { get; init; }
     [JsonIgnore] public ControllerLayout? Layout => DeviceCatalog.Identity(Vendor, Product) is uint identity ? DeviceCatalog.Layouts.GetValueOrDefault(identity) : null;
     [JsonIgnore] public string DisplayName => Layout?.Name ?? Name;
 }

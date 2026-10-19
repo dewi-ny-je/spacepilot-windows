@@ -42,6 +42,9 @@ public class ModelTests {
         await control.WaitForCount(4); control.Respond(3, Json.Encode(new Status { Devices = [device], Mock = true }));
         await clear;
         Assert.StartsWith("Could not calibrate", model.Message);
+        // Hardware rezero progress, as the service reports it.
+        model.AcceptStatus("{\"devices\":[{\"id\":7,\"vendor\":1133,\"product\":50727,\"rezero\":true,\"calibrating\":true,\"deviceCalibrated\":false}],\"mock\":false}");
+        Assert.True(model.Device?.Rezero); Assert.True(model.Device?.Calibrating); Assert.False(model.Device?.DeviceCalibrated);
         model.Shutdown();
     }
 

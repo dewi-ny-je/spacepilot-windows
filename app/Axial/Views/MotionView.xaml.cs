@@ -61,9 +61,14 @@ public partial class MotionView : UserControl {
             LedError.Visibility = Visibility.Visible;
         } else LedError.Visibility = Visibility.Collapsed;
         for (int i = 0; i < 6; i++) cards[i].Live(device != null && i < device.Axes.Length ? device.Axes[i] : 0);
-        CalibrateButton.IsEnabled = device != null;
+        CalibrateButton.IsEnabled = device != null && !device.Calibrating;
         ClearCalibrationButton.IsEnabled = device?.Calibrated == true;
-        CalibrationState.Text = device?.Calibrated == true ? "Calibrated" : "";
+        CalibrationState.Text = device switch {
+            { Calibrating: true } => "Calibrating, keep your hand off the cap…",
+            { Calibrated: true } => "Calibrated",
+            { DeviceCalibrated: true } => "Calibrated by the device",
+            _ => "",
+        };
     }
     async void OnCalibrate(object sender, RoutedEventArgs e) { if (model != null) await model.CalibrateAsync(); }
     async void OnClearCalibration(object sender, RoutedEventArgs e) { if (model != null) await model.CalibrateAsync(clear: true); }

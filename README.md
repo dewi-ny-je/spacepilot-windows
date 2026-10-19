@@ -27,8 +27,10 @@ After installation:
    reach elevated applications.
 3. Reopen your CAD application. In Fusion select the **Latest** SpaceMouse driver.
 4. If the view drifts while the cap is untouched, let go of it and click
-   **Motion → Calibrate** (or run `axialctl calibrate`). The current position
-   becomes the rest position until you clear it or reconnect the device.
+   **Motion → Calibrate** (or run `axialctl calibrate`). Devices that support
+   it rezero themselves like with 3DxWare: the LED blinks for a few seconds.
+   For other devices the current position becomes the rest position until you
+   clear it or reconnect the device.
    Applications that call `SiRezero` trigger the same calibration.
 
 Uninstalling from **Settings → Apps** removes the program, the compatibility

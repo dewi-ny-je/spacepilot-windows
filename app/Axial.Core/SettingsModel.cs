@@ -263,8 +263,9 @@ public sealed class SettingsModel : INotifyPropertyChanged {
             foreach (var waiter in waiters) waiter.TrySetResult();
         }
     }
-    // Zero calibration: the selected device's current deflection becomes its
-    // rest position until it is cleared or the device is reconnected.
+    // Zero calibration: devices that support it rezero themselves while their
+    // LED blinks; for others the current deflection becomes the rest position
+    // until it is cleared or the device is reconnected.
     public async Task CalibrateAsync(bool clear = false) {
         if (stopped || Device is not { } device) return;
         var request = "{\"op\":\"calibrate\",\"device\":" + device.Id + (clear ? ",\"clear\":true}" : "}");

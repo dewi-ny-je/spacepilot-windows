@@ -72,6 +72,20 @@ struct LEDOutput {
     }
     ~LEDOutput(){CloseHandle(file);HidD_FreePreparsedData(preparsed);}
 };
+// Hardware zero calibration. 3DxWare rezeroes a device by setting vendor
+// feature report 7 (usage 0xff00:0x22) to 0 while it blinks the LED, as
+// captured from a SpaceNavigator.
+struct RezeroOutput {
+    HANDLE file;
+    PHIDP_PREPARSED_DATA preparsed=nullptr;
+    USHORT collection;USHORT length;
+    std::atomic<bool> connected{true},busy{false};
+    RezeroOutput(HANDLE f,USHORT c,USHORT l):collection(c),length(l){
+        DuplicateHandle(GetCurrentProcess(),f,GetCurrentProcess(),&file,0,FALSE,DUPLICATE_SAME_ACCESS);HidD_GetPreparsedData(file,&preparsed);
+    }
+    ~RezeroOutput(){CloseHandle(file);if(preparsed)HidD_FreePreparsedData(preparsed);}
+};
+constexpr UCHAR rezeroReport=7;constexpr USAGE rezeroPage=0xff00,rezeroUsage=0x22;
 struct HID {
     HANDLE file=INVALID_HANDLE_VALUE;
     std::wstring path;
@@ -84,6 +98,8 @@ struct HID {
     uint32_t suppressedButtons=0;
     std::shared_ptr<LEDOutput> led;
     int requestedLED=-1;
+    std::shared_ptr<RezeroOutput> rezero;
+    bool deviceCalibrated=false;
     bool active() const {return file!=INVALID_HANDLE_VALUE;}
 };
 Loop loop;
@@ -132,26 +148,35 @@ std::atomic<size_t> keyRead{0},keyWrite{0};
 std::atomic<bool> keyOverflow{false};
 KeyState heldKeys;
 
+// Runs on the output worker.
+void writeLED(LEDOutput& output,bool enabled) {
+    if(!output.connected.load())return;
+    std::vector<char> report(output.length,0);report[0]=char(output.report);
+    USAGE usage=0x4b;ULONG count=1;NTSTATUS status=HIDP_STATUS_SUCCESS;
+    if(enabled)status=HidP_SetUsages(HidP_Output,0x08,output.collection,&usage,&count,output.preparsed,report.data(),ULONG(report.size()));
+    if(status!=HIDP_STATUS_SUCCESS){output.error=uint32_t(status);output.state=-1;return;}
+    bool ok=HidD_SetOutputReport(output.file,report.data(),ULONG(report.size()));
+    if(!ok){
+        // Some firmware accepts only interrupt OUT transfers.
+        OVERLAPPED overlapped{};overlapped.hEvent=CreateEventW(nullptr,TRUE,FALSE,nullptr);DWORD written=0;
+        ok=WriteFile(output.file,report.data(),DWORD(report.size()),nullptr,&overlapped)||GetLastError()==ERROR_IO_PENDING;
+        if(ok&&WaitForSingleObject(overlapped.hEvent,500)!=WAIT_OBJECT_0){CancelIoEx(output.file,&overlapped);ok=false;}
+        if(ok)ok=GetOverlappedResult(output.file,&overlapped,&written,TRUE);else GetOverlappedResult(output.file,&overlapped,&written,TRUE);
+        CloseHandle(overlapped.hEvent);
+    }
+    output.error=ok?0:GetLastError();output.state=ok?int(enabled):-1;
+}
 void setLED(HID& hid,bool enabled) {
     if(!hid.led||hid.requestedLED==int(enabled))return;
     hid.requestedLED=enabled;auto output=hid.led;
-    outputWorker->post([output,enabled]{
-        if(!output->connected.load())return;
-        std::vector<char> report(output->length,0);report[0]=char(output->report);
-        USAGE usage=0x4b;ULONG count=1;NTSTATUS status=HIDP_STATUS_SUCCESS;
-        if(enabled)status=HidP_SetUsages(HidP_Output,0x08,output->collection,&usage,&count,output->preparsed,report.data(),ULONG(report.size()));
-        if(status!=HIDP_STATUS_SUCCESS){output->error=uint32_t(status);output->state=-1;return;}
-        bool ok=HidD_SetOutputReport(output->file,report.data(),ULONG(report.size()));
-        if(!ok){
-            // Some firmware accepts only interrupt OUT transfers.
-            OVERLAPPED overlapped{};overlapped.hEvent=CreateEventW(nullptr,TRUE,FALSE,nullptr);DWORD written=0;
-            ok=WriteFile(output->file,report.data(),DWORD(report.size()),nullptr,&overlapped)||GetLastError()==ERROR_IO_PENDING;
-            if(ok&&WaitForSingleObject(overlapped.hEvent,500)!=WAIT_OBJECT_0){CancelIoEx(output->file,&overlapped);ok=false;}
-            if(ok)ok=GetOverlappedResult(output->file,&overlapped,&written,TRUE);else GetOverlappedResult(output->file,&overlapped,&written,TRUE);
-            CloseHandle(overlapped.hEvent);
-        }
-        output->error=ok?0:GetLastError();output->state=ok?int(enabled):-1;
-    });
+    outputWorker->post([output,enabled]{writeLED(*output,enabled);});
+}
+// Runs on the output worker.
+bool writeRezero(RezeroOutput& output) {
+    if(!output.connected.load()||!output.preparsed)return false;
+    std::vector<char> report(output.length,0);report[0]=char(rezeroReport);
+    if(HidP_SetUsageValue(HidP_Feature,rezeroPage,output.collection,rezeroUsage,0,output.preparsed,report.data(),ULONG(report.size()))!=HIDP_STATUS_SUCCESS)return false;
+    return HidD_SetFeature(output.file,report.data(),ULONG(report.size()));
 }
 
 bool extendedKey(int key) {
@@ -299,6 +324,41 @@ void selectProfile() {
     }
 }
 
+std::atomic<bool> stopping{false};
+// Hardware zero calibration, timed like 3DxWare: the LED blinks for about four
+// seconds and the device is rezeroed halfway through, once the cap has settled.
+// A device that rejects the request is calibrated in software instead.
+void finishCalibration(uint32_t id,bool rezeroed) {
+    for(auto& h:hidDevices)if(h.active()&&h.decoder.state.device==id){
+        if(rezeroed){zeroOffsets.erase(id);h.deviceCalibrated=true;}
+        else if(auto motion=lastMotion.find(id);motion!=lastMotion.end()){
+            zeroOffsets[id]=motion->second.axes;Event e=motion->second;e.received=now();route(e);
+        }
+        return;
+    }
+}
+void restoreLED(uint32_t id){for(auto& h:hidDevices)if(h.active()&&h.decoder.state.device==id){h.requestedLED=-1;setLED(h,h.profile.led);}}
+void calibrateDevice(HID& h) {
+    auto rezero=h.rezero;auto led=h.led;uint32_t id=h.decoder.state.device;
+    if(rezero->busy.exchange(true))return;
+    std::thread([rezero,led,id]{
+        bool on=false;
+        auto blink=[&](int toggles){
+            for(int i=0;i<toggles&&rezero->connected&&!stopping;++i){
+                on=!on;if(led)outputWorker->post([led,on]{writeLED(*led,on);});Sleep(265);
+            }
+        };
+        blink(8);
+        auto result=std::make_shared<std::promise<bool>>();auto rezeroed=result->get_future();
+        outputWorker->post([rezero,result]{result->set_value(!stopping&&writeRezero(*rezero));});
+        bool ok=rezeroed.get();
+        loop.post([id,ok]{finishCalibration(id,ok);});
+        blink(8);
+        rezero->busy=false;
+        if(!stopping)loop.post([id]{restoreLED(id);});
+    }).detach();
+}
+
 // ---- HID input ---------------------------------------------------------
 void readNext(HID& h);
 void removeDevice(HID& h) {
@@ -307,7 +367,8 @@ void removeDevice(HID& h) {
     loop.remove(h.overlapped.hEvent);
     Event e=h.decoder.state;e.axes={};e.buttons=0;e.kind=Kind::removed;e.received=now();route(e);
     if(h.led)h.led->connected=false;
-    h.led.reset();CloseHandle(h.overlapped.hEvent);CloseHandle(h.file);h.file=INVALID_HANDLE_VALUE;h.path.clear();
+    if(h.rezero)h.rezero->connected=false;
+    h.led.reset();h.rezero.reset();CloseHandle(h.overlapped.hEvent);CloseHandle(h.file);h.file=INVALID_HANDLE_VALUE;h.path.clear();
 }
 // Windows pads every input report to the longest report of the collection.
 // Restore each report's own length, as delivered by IOKit on macOS.
@@ -385,6 +446,17 @@ void openDevice(const std::wstring& path) {
             for(USHORT i=0;i<count;++i){const auto& b=buttons[i];
                 USAGE low=b.IsRange?b.Range.UsageMin:b.NotRange.Usage,high=b.IsRange?b.Range.UsageMax:b.NotRange.Usage;
                 if(b.UsagePage==8&&low<=0x4b&&high>=0x4b){h.led=std::make_shared<LEDOutput>(file,preparsed,b.ReportID,b.LinkCollection,caps.OutputReportByteLength);keepPreparsed=true;break;}
+            }
+        // Hardware rezero: the vendor feature report 3DxWare uses for calibration.
+        std::vector<HIDP_VALUE_CAPS> features(caps.NumberFeatureValueCaps);count=caps.NumberFeatureValueCaps;
+        if(count&&HidP_GetValueCaps(HidP_Feature,features.data(),&count,preparsed)==HIDP_STATUS_SUCCESS)
+            for(USHORT i=0;i<count;++i){const auto& v=features[i];
+                USAGE low=v.IsRange?v.Range.UsageMin:v.NotRange.Usage,high=v.IsRange?v.Range.UsageMax:v.NotRange.Usage;
+                if(v.ReportID==rezeroReport&&v.UsagePage==rezeroPage&&low<=rezeroUsage&&high>=rezeroUsage){
+                    auto rezero=std::make_shared<RezeroOutput>(file,v.LinkCollection,caps.FeatureReportByteLength);
+                    if(rezero->preparsed)h.rezero=rezero;
+                    break;
+                }
             }
         if(!keepPreparsed)HidD_FreePreparsedData(preparsed);
         auto& e=h.decoder.state;e.device=nextDevice++;e.vendor=attributes.VendorID;e.product=attributes.ProductID;
@@ -563,12 +635,13 @@ struct Snapshot {
     std::array<bool,16> ledSupported{};
     std::array<int,16> ledState{};
     std::array<uint32_t,16> ledError{};
-    std::array<bool,16> calibrated{};
+    std::array<bool,16> calibrated{},rezero{},calibrating{},deviceCalibrated{};
 };
 json::object status() {
     Snapshot s=loop.sync([]{
         Snapshot snapshot;
-        for(const auto& h:hidDevices)if(h.active()&&snapshot.count<16){size_t i=snapshot.count++;snapshot.latest[i]=h.decoder.state;snapshot.ledSupported[i]=bool(h.led);snapshot.ledState[i]=h.led?h.led->state.load():-1;snapshot.ledError[i]=h.led?h.led->error.load():0;}
+        for(const auto& h:hidDevices)if(h.active()&&snapshot.count<16){size_t i=snapshot.count++;snapshot.latest[i]=h.decoder.state;snapshot.ledSupported[i]=bool(h.led);snapshot.ledState[i]=h.led?h.led->state.load():-1;snapshot.ledError[i]=h.led?h.led->error.load():0;
+            snapshot.rezero[i]=bool(h.rezero);snapshot.calibrating[i]=h.rezero&&h.rezero->busy.load();snapshot.deviceCalibrated[i]=h.deviceCalibrated;}
         for(const auto& e:virtualDevices)if(e.device&&snapshot.count<16)snapshot.latest[snapshot.count++]=e;
         // Report axes as clients see them, relative to a calibrated rest position.
         for(size_t i=0;i<snapshot.count;++i)if(auto zero=zeroOffsets.find(snapshot.latest[i].device);zero!=zeroOffsets.end()){
@@ -584,7 +657,8 @@ json::object status() {
         json::array axes;for(int16_t x:e.axes)axes.push_back(x);
         items.push_back(json::object{{"id",e.device},{"vendor",e.vendor},{"product",e.product},{"name",spec?spec->name:"Unknown"},
             {"buttonCount",spec?spec->buttons.size():0},{"axes",axes},{"buttons",e.buttons},{"ledSupported",s.ledSupported[i]},
-            {"ledState",s.ledState[i]},{"ledError",s.ledError[i]},{"calibrated",s.calibrated[i]}});
+            {"ledState",s.ledState[i]},{"ledError",s.ledError[i]},{"calibrated",s.calibrated[i]},
+            {"rezero",s.rezero[i]},{"calibrating",s.calibrating[i]},{"deviceCalibrated",s.deviceCalibrated[i]}});
     }
     PROCESS_MEMORY_COUNTERS memory{};GetProcessMemoryInfo(GetCurrentProcess(),&memory,sizeof(memory));
     FILETIME created,exited,kernel,user;GetProcessTimes(GetCurrentProcess(),&created,&exited,&kernel,&user);
@@ -611,20 +685,25 @@ json::value handle(const json::value& request) {
         if(clearValue&&!clearValue->is_bool())return json::object{{"error","clear must be a boolean"}};
         if(deviceValue&&!(deviceValue->is_int64()&&deviceValue->as_int64()>0&&deviceValue->as_int64()<=UINT32_MAX))return json::object{{"error","device must be a device id"}};
         bool clear=clearValue&&clearValue->as_bool();uint32_t device=deviceValue?uint32_t(deviceValue->as_int64()):0;
-        size_t changed=loop.sync([clear,device]{
-            size_t count=0;
+        auto [changed,hardware]=loop.sync([clear,device]{
+            size_t count=0,hardware=0;
+            // Devices that support it rezero themselves; the result arrives later.
+            std::vector<uint32_t> rezeroed;
+            if(!clear)for(auto& h:hidDevices)if(h.active()&&h.rezero&&(!device||h.decoder.state.device==device)){
+                calibrateDevice(h);rezeroed.push_back(h.decoder.state.device);++count;++hardware;
+            }
             // Re-send each device's last reading so clients see the new rest position at once.
             for(auto [id,motion]:lastMotion){
-                if(device&&id!=device)continue;
+                if((device&&id!=device)||std::find(rezeroed.begin(),rezeroed.end(),id)!=rezeroed.end())continue;
                 if(clear){if(!zeroOffsets.erase(id))continue;}else zeroOffsets[id]=motion.axes;
                 ++count;motion.received=now();route(motion);
             }
             if(clear)for(auto it=zeroOffsets.begin();it!=zeroOffsets.end();){
                 if(!device||it->first==device){it=zeroOffsets.erase(it);++count;}else ++it;
             }
-            return count;
+            return std::pair{count,hardware};
         });
-        return json::object{{"ok",true},{"calibrated",changed}};
+        return json::object{{"ok",true},{"calibrated",changed},{"hardware",hardware}};
     }
     if(op=="getConfig"){std::lock_guard lock(documentMutex);return document;}
     if(op=="getCommands"){std::lock_guard lock(documentMutex);return commandCatalog;}
@@ -769,6 +848,7 @@ int main(int argc,char** argv) {
     loop.post(scanDevices);
     fprintf(stderr,"Axial %s listening at %s\n",mockMode?"mock service":"USB service",path.c_str());
     loop.run();
+    stopping=true;
     // Orderly shutdown: release held input, switch LEDs off and remove sockets.
     resetFocus();for(auto& p:peers)closePeer(p);
     for(auto& h:hidDevices)if(h.active())setLED(h,false);

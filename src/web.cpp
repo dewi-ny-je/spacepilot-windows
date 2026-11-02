@@ -358,7 +358,7 @@ struct WebServer::Impl::Session:std::enable_shared_from_this<Session> {
                     // A standard view looks at the model's centre, oriented from the
                     // client's front view or, failing that, its coordinate system.
                     Camera front;double m[16];auto matrix=member(values,"views.front"),system=member(values,"coordinateSystem");
-                    auto load=[&](const json::value& v){for(int i=0;i<16;++i)m[i]=number(v.as_array()[i]);return true;};
+                    auto load=[&](const json::value& v){for(int i=0;i<16;++i)m[i]=number(v.as_array()[c->rowMajor?(i%4)*4+i/4:i]);return true;};
                     if(!(numbers(matrix,16)&&load(matrix)&&frontFromView(m,front))&&numbers(system,16)&&load(system))frontFromCoordinateSystem(m,front);
                     auto oriented=orient(view,front);camera.right=oriented.right;camera.up=oriented.up;camera.back=oriented.back;
                     pivot={(number(b[0])+number(b[3]))/2,(number(b[1])+number(b[4]))/2,(number(b[2])+number(b[5]))/2};viewed=true;
@@ -381,8 +381,10 @@ struct WebServer::Impl::Session:std::enable_shared_from_this<Session> {
         if(!perspective&&hasExtents)remote(c,"self:update",json::array{"view.extents",extents},{});
         // Later navigation orbits the model centre the standard view looks at.
         if(viewed)remote(c,"self:update",json::array{"pivot.position",json::array{pivot.x,pivot.y,pivot.z}},{});
-        std::weak_ptr<Session> weak=shared_from_this();auto generation=c->generation;
-        remote(c,"self:update",json::array{"transaction",0},[weak,c,generation](bool,json::value){if(auto self=weak.lock();self&&c->generation==generation)c->busy=false;});
+        // Like 3DxWare, do not wait for the transaction end: a client that never
+        // answers it would otherwise hold the controller busy until the deadline.
+        // The next frame's reads still pace navigation to the client.
+        remote(c,"self:update",json::array{"transaction",0},{});c->busy=false;
         if(!c->lastInput)stop(c);
     }
 };

@@ -129,7 +129,7 @@ void onshapeInitialization(sn::WebServer& server,unsigned port,const std::string
 // view.affine and motion, and rejects "transaction" as an unknown property. Its
 // matrices are row-major without declaring rowMajorOrder. 3DxWare keeps
 // navigating; Axial must not time the session out, stop motion or mix layouts.
-void unansweredUpdates(sn::WebServer& server,unsigned port,const std::string& directory){
+void unansweredUpdates(sn::WebServer& server,unsigned port,const std::string& directory,bool rejectTransaction){
     Client client(port,directory+"/root.crt");client.connect();
     client.send(json::array{1,"3dx_rpc","wss://127.51.68.120/3dconnexion#"});
     client.send(json::array{1,"3dconnexion","wss://127.51.68.120/3dconnexion"});
@@ -155,7 +155,7 @@ void unansweredUpdates(sn::WebServer& server,unsigned port,const std::string& di
         CHECK(call[2]=="self:update");
         if(property=="view.affine"){rowMajor=call[5].as_array();++matrices;auto n=[&](int i){return rowMajor[i].to_number<double>();};CHECK(n(12)==0&&n(13)==0&&n(14)==0&&n(15)==1);}
         else if(property=="motion"){if(!call[5].as_bool())++motionOff;}
-        else if(property=="transaction")client.send(json::array{4,call[1],"self:update#generic","transaction unknown property"});
+        else if(property=="transaction"&&rejectTransaction)client.send(json::array{4,call[1],"self:update#generic","transaction unknown property"});
     };
     sn::Event e;e.device=1;e.vendor=0x046d;e.product=0xc629;e.kind=sn::Kind::motion;e.axes[0]=350;e.flags=sn::Flags::orbit;server.receive(e);
     auto started=std::chrono::steady_clock::now(),sent=started;int early=0;
@@ -236,7 +236,9 @@ int main(int argc,char** argv){try{
         CHECK(second!=controller);client.call({2,"delete","rpc:delete",prefix+text(second)});
         client.unknownController(text(second));
     }
-    unansweredUpdates(server,port,directory);
+    unansweredUpdates(server,port,directory,true);
+    // A client that leaves the transaction end unanswered must not stall frames.
+    unansweredUpdates(server,port,directory,false);
     onshapeInitialization(server,port,directory);
     sn::WebServer conflict("127.0.0.1",port);conflict.configure(config);
     std::this_thread::sleep_for(std::chrono::milliseconds(100));CHECK(json::parse(conflict.status()).as_object()["listening"]==false);

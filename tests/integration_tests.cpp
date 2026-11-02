@@ -352,6 +352,7 @@ int main(int argc,char** argv){try {
     e.axes={12,-7,0,0,0,30};CHECK(sn::writeAll(inject,&e,sizeof(e)));CHECK((nextMotion()==Axes{12,-7,0,0,0,30}));
     CHECK(sn::request(R"({"op":"calibrate","clear":1})").find("error")!=std::string::npos);
     CHECK(sn::request(R"({"op":"calibrate","device":-1})").find("error")!=std::string::npos);
+    for(const char* invalid:{R"({"op":"calibrate","device":0})",R"({"op":"calibrate","device":1.5})",R"({"op":"calibrate","device":"1"})"})CHECK(sn::request(invalid).find("error")!=std::string::npos);
     // Virtual devices have no hardware rezero, so they are calibrated in software.
     CHECK(sn::request(R"({"op":"calibrate"})").find("\"hardware\":0")!=std::string::npos);
     CHECK((nextMotion()==Axes{}));
